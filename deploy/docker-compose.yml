@@ -1,0 +1,64 @@
+# Production-ish deployment for the control plane on a single VPS.
+#
+# Topology:
+#   internet --443--> caddy (TLS) --edge--> control-plane --bots--> per-user freqtrade
+# Only caddy publishes ports. The freqtrade bot containers (launched at runtime by the
+# control plane via the Docker API) join the `control-plane-bots` network and publish
+# NO ports, so they are unreachable from the internet.
+#
+# Path note (docker-out-of-docker): the control plane writes each user's config.json to
+# CP_BOT_DATA_ROOT and then asks the host Docker daemon to bind-mount that HOST path into
+# the bot container. So CP_BOT_DATA_ROOT must be mounted into the control plane at the
+# SAME path it has on the host (here: /srv/control-plane/bots).
+
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    depends_on:
+      - control-plane
+
+  control-plane:
+    build:
+      context: ../backend
+    restart: unless-stopped
+    env_file:
+      - ../backend/.env
+    environment:
+      CP_DATABASE_URL: sqlite:////data/control_plane.sqlite
+      CP_BOT_DATA_ROOT: /srv/control-plane/bots
+      CP_BOT_NETWORK: control-plane-bots
+      CP_BOT_ADDRESS_MODE: dns
+    volumes:
+      # Manage sibling bot containers via the host Docker daemon.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same path on host and in-container so bind mounts resolve correctly.
+      - /srv/control-plane/bots:/srv/control-plane/bots
+      # Persist the control-plane database.
+      - cp_data:/data
+    networks:
+      - edge
+      - control-plane-bots
+    # No published ports: reachable only via caddy on the edge network.
+
+networks:
+  edge:
+    name: control-plane-edge
+  control-plane-bots:
+    # Fixed name (no compose project prefix) so the Docker SDK attaches bot
+    # containers to this exact network.
+    name: control-plane-bots
+
+volumes:
+  caddy_data:
+  caddy_config:
+  cp_data:

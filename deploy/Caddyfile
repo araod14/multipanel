@@ -1,0 +1,11 @@
+# Replace control-plane.example.com with your real domain.
+# Caddy obtains and renews TLS certificates automatically via Let's Encrypt.
+control-plane.example.com {
+    encode gzip
+    reverse_proxy control-plane:9000
+}
+
+# For a quick local/staging test without a domain, comment the block above and use:
+# :80 {
+#     reverse_proxy control-plane:9000
+# }

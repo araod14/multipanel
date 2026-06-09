@@ -1,0 +1,25 @@
+# Secrets and local state — never commit
+backend/.env
+.env
+**/.venv/
+**/__pycache__/
+*.sqlite
+backend/_test_bots/
+backend/backups/
+deploy/backups/
+
+# Python
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Node / frontend
+**/node_modules/
+frontend/dist/
+*.log
+
+# Tooling / editors
+.playwright-mcp/
+.vscode/
+.idea/
+.DS_Store
