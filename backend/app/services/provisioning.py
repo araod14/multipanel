@@ -21,7 +21,7 @@ from app.models.bot_instance import BotInstance, BotStatus
 from app.models.exchange_credential import ExchangeCredential
 from app.models.user import User
 from app.security import vault
-from app.services import config_builder, strategy_assets
+from app.services import bot_config, config_builder, strategy_assets
 from app.services.credentials import generate_instance_credentials
 from app.services.runtime import BotRuntime, ContainerSpec
 
@@ -77,7 +77,7 @@ def provision_bot(
     instance.container_name = name
     instance.internal_hostname = name
     instance.dry_run = desired_dry_run
-    instance.stake_currency = "USDT"
+    instance.stake_currency = bot_config.effective(instance.user_config_json)["stake_currency"]
     instance.db_path = CONTAINER_DB_URL
     instance.api_username = creds.api_username
     instance.api_password_enc = vault.encrypt(creds.api_password)
@@ -131,21 +131,22 @@ def deprovision_bot(db: Session, instance: BotInstance, *, runtime: BotRuntime |
 
 
 def _render_user_data(user: User, instance: BotInstance) -> None:
-    """Write ``config.json``, the default strategy and ensure log dir exist."""
+    """Write ``config.json`` and the selected strategy, and ensure dirs exist."""
     host_dir = _host_dir(user.username)
     (host_dir / "strategies").mkdir(parents=True, exist_ok=True)
     (host_dir / "logs").mkdir(parents=True, exist_ok=True)
 
+    user_cfg = bot_config.effective(instance.user_config_json)
     config = config_builder.build_bot_config(
         username=user.username,
         exchange_name=_exchange_name(user),
-        stake_currency=instance.stake_currency,
         dry_run=instance.dry_run,
+        user_config=user_cfg,
     )
     (host_dir / "config.json").write_text(json.dumps(config, indent=2))
 
-    strategy_path = host_dir / "strategies" / f"{strategy_assets.DEFAULT_STRATEGY_CLASS}.py"
-    strategy_path.write_text(strategy_assets.DEFAULT_STRATEGY_SOURCE)
+    spec = strategy_assets.get_spec(user_cfg["strategy"])
+    (host_dir / "strategies" / f"{spec.class_name}.py").write_text(spec.source)
 
     # Freqtrade container runs as a non-root user; make the tree group/other writable
     # so it can write logs and the sqlite db into the bind mount.
@@ -156,12 +157,14 @@ def _render_user_data(user: User, instance: BotInstance) -> None:
 def _build_spec(user: User, instance: BotInstance, *, creds) -> ContainerSpec:
     settings = get_settings()
     env = _build_env(user, instance, creds)
+    user_cfg = bot_config.effective(instance.user_config_json)
+    strategy_class = strategy_assets.get_spec(user_cfg["strategy"]).class_name
     command = [
         "trade",
         "--config",
         CONTAINER_CONFIG,
         "--strategy",
-        strategy_assets.DEFAULT_STRATEGY_CLASS,
+        strategy_class,
         "--db-url",
         CONTAINER_DB_URL,
         "--logfile",

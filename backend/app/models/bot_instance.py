@@ -4,7 +4,7 @@ import enum
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String
+from sqlalchemy import JSON, Boolean, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -48,6 +48,9 @@ class BotInstance(Base):
     dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
     stake_currency: Mapped[str] = mapped_column(String(16), default="USDT")
     db_path: Mapped[str] = mapped_column(String(255))
+
+    # User-editable Freqtrade settings (safe whitelist; see services/bot_config.py).
+    user_config_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
     # Generated Freqtrade api_server credentials (encrypted at rest).
     api_username: Mapped[str] = mapped_column(String(64))

@@ -9,6 +9,17 @@ control plane securely proxies to that instance's REST API.
 > Built for a small, static set of users on a single VPS. Real exchange keys are
 > encrypted at rest and only ever injected into containers as environment variables.
 
+## Features
+
+- **Admin panel** — create/delete users, provision and start/stop each user's bot, set
+  their (encrypted) exchange API keys, and switch a bot between dry-run and live trading.
+- **Per-user bot, fully isolated** — own container, config, trade database and keys.
+- **Self-service settings** — each user picks a strategy and edits a safe set of
+  parameters (pairs, stake, max open trades, stoploss, take-profit ROI, timeframe) from
+  their own dashboard; saving re-provisions their bot.
+- **Secure by construction** — exchange keys encrypted at rest; bots on an internal
+  network with no public ports; only the TLS-terminated control plane is exposed.
+
 ## Architecture
 
 ```
@@ -28,33 +39,26 @@ internet --TLS--> control plane (only exposed service)
 - **Deploy** (`deploy/`) — Caddy (automatic TLS) + docker-compose; only the control plane
   is internet-facing.
 
-## Quick start (development)
+## Running
 
-Backend:
+A `Makefile` wraps the common tasks (`make help` lists them). Docker must be running.
 
+**Development:**
 ```bash
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env   # fill in CP_JWT_SECRET, CP_FERNET_KEY, CP_BOOTSTRAP_ADMIN_*
-uvicorn app.main:app --reload --port 9000
+make install      # backend venv + frontend deps
+make env          # backend/.env with generated secrets (then set CP_BOOTSTRAP_ADMIN_*)
+make dev-start    # backend :9000 + frontend :5173 in the background
+# open http://localhost:5173 and log in as the bootstrap admin
+make dev-stop
 ```
 
-Frontend:
-
+**Production (VPS, TLS):**
 ```bash
-cd frontend
-npm install
-npm run dev            # http://localhost:5173 (proxies /api -> :9000)
+make pull-freqtrade build up    # caddy + control plane; only caddy is exposed
 ```
 
-## Production
-
-```bash
-cd deploy
-# set your domain in Caddyfile and real secrets in ../backend/.env
-docker compose up -d --build
-```
+Full instructions and a first-use walkthrough are in **[`RUNNING.md`](./RUNNING.md)**;
+production specifics in **[`deploy/README.md`](./deploy/README.md)**.
 
 ## Security model
 

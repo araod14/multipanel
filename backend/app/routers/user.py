@@ -8,9 +8,11 @@ Freqtrade REST API is forwarded.
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.models.bot_instance import BotInstance
+from app.schemas.bot_config import BotConfigIn, BotConfigOut, StrategyOption
 from app.schemas.bots import BotInstanceOut
 from app.security.deps import CurrentUser, DbSession
-from app.services import proxy
+from app.services import bot_config, provisioning, proxy, strategy_assets
+from app.services.bot_config import ConfigValidationError
 from app.services.proxy import ProxyError
 
 router = APIRouter(prefix="/me", tags=["user"])
@@ -67,6 +69,45 @@ def _bot_or_404(user) -> BotInstance:
 def my_bot(user: CurrentUser) -> BotInstance:
     """Return the caller's bot bookkeeping (status, dry_run, etc.)."""
     return _bot_or_404(user)
+
+
+def _config_out(instance: BotInstance) -> BotConfigOut:
+    cfg = bot_config.effective(instance.user_config_json)
+    return BotConfigOut(
+        **cfg,
+        available_strategies=[
+            StrategyOption(key=s.key, label=s.label) for s in strategy_assets.STRATEGIES.values()
+        ],
+        available_timeframes=bot_config.ALLOWED_TIMEFRAMES,
+    )
+
+
+@router.get("/bot/config", response_model=BotConfigOut)
+def get_config(user: CurrentUser) -> BotConfigOut:
+    """Return the caller's editable bot settings and the available choices."""
+    return _config_out(_bot_or_404(user))
+
+
+@router.put("/bot/config", response_model=BotConfigOut)
+def update_config(body: BotConfigIn, user: CurrentUser, db: DbSession) -> BotConfigOut:
+    """Update the caller's editable settings and re-provision their bot.
+
+    Settings are merged over the current ones, validated, persisted, and the bot
+    container is recreated so the new config and strategy take effect.
+    """
+    instance = _bot_or_404(user)
+    current = bot_config.effective(instance.user_config_json)
+    merged = {**current, **body.to_payload()}
+    try:
+        validated = bot_config.validate(merged)
+    except ConfigValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    instance.user_config_json = validated  # reassign so SQLAlchemy tracks the change
+    provisioning.provision_bot(db, user)
+    db.commit()
+    db.refresh(instance)
+    return _config_out(instance)
 
 
 @router.api_route("/bot/ft/{ft_path:path}", methods=["GET", "POST", "DELETE"])

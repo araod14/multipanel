@@ -10,6 +10,7 @@ import { UserLayout } from "./pages/user/UserLayout";
 import { DashboardPage } from "./pages/user/DashboardPage";
 import { TradesPage } from "./pages/user/TradesPage";
 import { ControlsPage } from "./pages/user/ControlsPage";
+import { SettingsPage } from "./pages/user/SettingsPage";
 
 export function App() {
   const { isAuthed, kind } = useAuth();
@@ -44,6 +45,7 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="trades" element={<TradesPage />} />
         <Route path="controls" element={<ControlsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to={isAuthed ? (kind === "admin" ? "/admin" : "/app") : "/login"} replace />} />

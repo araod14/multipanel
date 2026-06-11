@@ -53,29 +53,32 @@ def build_bot_config(
     *,
     username: str,
     exchange_name: str,
-    stake_currency: str,
     dry_run: bool,
-    base_config: dict[str, Any] | None = None,
+    user_config: dict[str, Any],
 ) -> dict[str, Any]:
     """Return the config dict to be written to a user's ``config.json``.
 
     :param username: becomes ``bot_name`` and the CORS/identity label.
     :param exchange_name: ccxt exchange id (e.g. ``binance``).
-    :param stake_currency: e.g. ``USDT``.
     :param dry_run: when ``True`` no real orders are placed.
-    :param base_config: non-secret overrides from the assigned StrategyTemplate,
-        deep-merged over the built-in defaults.
+    :param user_config: validated user-editable settings (see ``services.bot_config``):
+        pairs, stake_currency, stake_amount, max_open_trades, stoploss, roi, timeframe.
     """
     settings = get_settings()
     config = deepcopy(_BASE_CONFIG)
 
-    if base_config:
-        config = _deep_merge(config, base_config)
-
     config["bot_name"] = username
     config["dry_run"] = dry_run
-    config["stake_currency"] = stake_currency
     config["exchange"]["name"] = exchange_name
+
+    # Apply the user-editable, schema-safe fields.
+    config["stake_currency"] = user_config["stake_currency"]
+    config["stake_amount"] = user_config["stake_amount"]
+    config["max_open_trades"] = user_config["max_open_trades"]
+    config["stoploss"] = user_config["stoploss"]
+    config["minimal_roi"] = {"0": user_config["roi"]}
+    config["timeframe"] = user_config["timeframe"]
+    config["exchange"]["pair_whitelist"] = list(user_config["pairs"])
 
     # api_server: secrets injected via env, so they are intentionally absent here.
     config["api_server"] = {
@@ -87,14 +90,3 @@ def build_bot_config(
         "CORS_origins": [settings.public_origin],
     }
     return config
-
-
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    """Recursively merge ``override`` into a copy of ``base``."""
-    result = deepcopy(base)
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-            result[key] = _deep_merge(result[key], value)
-        else:
-            result[key] = deepcopy(value)
-    return result

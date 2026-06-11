@@ -13,6 +13,7 @@ export function UserLayout() {
         </NavLink>
         <NavLink to="/app/trades">Trades</NavLink>
         <NavLink to="/app/controls">Controls</NavLink>
+        <NavLink to="/app/settings">Settings</NavLink>
         <div className="spacer" />
         <button className="secondary" onClick={logout}>
           Log out

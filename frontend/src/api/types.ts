@@ -38,3 +38,35 @@ export interface ExchangeCredentialInput {
   password?: string;
   uid?: string;
 }
+
+export interface StrategyOption {
+  key: string;
+  label: string;
+}
+
+export interface BotConfig {
+  strategy: string;
+  pairs: string[];
+  stake_currency: string;
+  stake_amount: number | string;
+  max_open_trades: number;
+  stoploss: number;
+  roi: number;
+  timeframe: string;
+  available_strategies: StrategyOption[];
+  available_timeframes: string[];
+}
+
+export type BotConfigInput = Partial<
+  Pick<
+    BotConfig,
+    | "strategy"
+    | "pairs"
+    | "stake_currency"
+    | "stake_amount"
+    | "max_open_trades"
+    | "stoploss"
+    | "roi"
+    | "timeframe"
+  >
+>;
