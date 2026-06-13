@@ -42,6 +42,7 @@ export interface ExchangeCredentialInput {
 export interface StrategyOption {
   key: string;
   label: string;
+  description: string;
 }
 
 export interface BotConfig {

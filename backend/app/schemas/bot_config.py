@@ -10,6 +10,7 @@ class StrategyOption(BaseModel):
 
     key: str
     label: str
+    description: str
 
 
 class BotConfigOut(BaseModel):

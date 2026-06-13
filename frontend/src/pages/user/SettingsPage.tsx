@@ -84,6 +84,10 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
           </option>
         ))}
       </select>
+      {(() => {
+        const selected = data.available_strategies.find((s) => s.key === strategy);
+        return selected ? <p className="muted">{selected.description}</p> : null;
+      })()}
 
       <label>Pairs (comma-separated)</label>
       <input value={pairs} onChange={(e) => setPairs(e.target.value)} placeholder="BTC/USDT, ETH/USDT" />

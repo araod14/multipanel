@@ -76,7 +76,8 @@ def _config_out(instance: BotInstance) -> BotConfigOut:
     return BotConfigOut(
         **cfg,
         available_strategies=[
-            StrategyOption(key=s.key, label=s.label) for s in strategy_assets.STRATEGIES.values()
+            StrategyOption(key=s.key, label=s.label, description=s.description)
+            for s in strategy_assets.STRATEGIES.values()
         ],
         available_timeframes=bot_config.ALLOWED_TIMEFRAMES,
     )
