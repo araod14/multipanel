@@ -1,35 +1,27 @@
-# Production-ish deployment for the control plane on a single VPS.
+# Deployment for the control plane on a single VPS that ALREADY runs a host
+# nginx + certbot fronting other sites (shared box). Instead of bundling Caddy
+# (which would fight the host nginx for :80/:443), we expose the control plane
+# only on 127.0.0.1:9000 and let the host nginx vhost terminate TLS and proxy
+# to it. The control plane serves both the API and the built React SPA, so the
+# nginx vhost is a plain reverse proxy (see deploy/nginx.danelbot.conf).
 #
 # Topology:
-#   internet --443--> caddy (TLS) --edge--> control-plane --bots--> per-user freqtrade
-# Only caddy publishes ports. The freqtrade bot containers (launched at runtime by the
-# control plane via the Docker API) join the `control-plane-bots` network and publish
-# NO ports, so they are unreachable from the internet.
+#   internet --443--> host nginx (TLS) --127.0.0.1:9000--> control-plane
+#                                                            └─bots─> per-user freqtrade
+# Bot containers (launched at runtime via the Docker API) join control-plane-bots
+# and publish NO ports, so they are unreachable from the internet.
 #
-# Path note (docker-out-of-docker): the control plane writes each user's config.json to
-# CP_BOT_DATA_ROOT and then asks the host Docker daemon to bind-mount that HOST path into
-# the bot container. So CP_BOT_DATA_ROOT must be mounted into the control plane at the
-# SAME path it has on the host (here: /srv/control-plane/bots).
+# Path note (docker-out-of-docker): the control plane writes each user's config
+# to CP_BOT_DATA_ROOT and asks the HOST Docker daemon to bind-mount that HOST
+# path into the bot container, so CP_BOT_DATA_ROOT must be mounted into the
+# control plane at the SAME path it has on the host (/srv/control-plane/bots).
 
 services:
-  caddy:
-    image: caddy:2
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - edge
-    depends_on:
-      - control-plane
-
   control-plane:
     build:
-      context: ../backend
+      # Repo root so the Dockerfile can build the frontend too.
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     env_file:
       - ../backend/.env
@@ -38,6 +30,9 @@ services:
       CP_BOT_DATA_ROOT: /srv/control-plane/bots
       CP_BOT_NETWORK: control-plane-bots
       CP_BOT_ADDRESS_MODE: dns
+    ports:
+      # Localhost-only: reachable by the host nginx, never from the internet.
+      - "127.0.0.1:9000:9000"
     volumes:
       # Manage sibling bot containers via the host Docker daemon.
       - /var/run/docker.sock:/var/run/docker.sock
@@ -46,19 +41,13 @@ services:
       # Persist the control-plane database.
       - cp_data:/data
     networks:
-      - edge
       - control-plane-bots
-    # No published ports: reachable only via caddy on the edge network.
 
 networks:
-  edge:
-    name: control-plane-edge
   control-plane-bots:
     # Fixed name (no compose project prefix) so the Docker SDK attaches bot
     # containers to this exact network.
     name: control-plane-bots
 
 volumes:
-  caddy_data:
-  caddy_config:
   cp_data:
