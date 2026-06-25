@@ -45,29 +45,48 @@ export interface StrategyOption {
   description: string;
 }
 
+export interface RoiStep {
+  minutes: number;
+  roi: number;
+}
+
+export type PairlistMode = "static" | "volume";
+
 export interface BotConfig {
   strategy: string;
+  pairlist_mode: PairlistMode;
   pairs: string[];
+  volume_number_assets: number;
   stake_currency: string;
   stake_amount: number | string;
   max_open_trades: number;
   stoploss: number;
-  roi: number;
+  roi_table: RoiStep[];
   timeframe: string;
+  trailing_stop: boolean;
+  trailing_stop_positive: number | null;
+  trailing_stop_positive_offset: number;
+  dry_run_wallet: number;
   available_strategies: StrategyOption[];
   available_timeframes: string[];
+  available_pairlist_modes: PairlistMode[];
 }
 
 export type BotConfigInput = Partial<
   Pick<
     BotConfig,
     | "strategy"
+    | "pairlist_mode"
     | "pairs"
-    | "stake_currency"
+    | "volume_number_assets"
     | "stake_amount"
     | "max_open_trades"
     | "stoploss"
-    | "roi"
+    | "roi_table"
     | "timeframe"
+    | "trailing_stop"
+    | "trailing_stop_positive"
+    | "trailing_stop_positive_offset"
+    | "dry_run_wallet"
   >
 >;

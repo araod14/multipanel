@@ -75,11 +75,13 @@ def _config_out(instance: BotInstance) -> BotConfigOut:
     cfg = bot_config.effective(instance.user_config_json)
     return BotConfigOut(
         **cfg,
+        stake_currency=bot_config.STAKE_CURRENCY,
         available_strategies=[
             StrategyOption(key=s.key, label=s.label, description=s.description)
             for s in strategy_assets.STRATEGIES.values()
         ],
         available_timeframes=bot_config.ALLOWED_TIMEFRAMES,
+        available_pairlist_modes=bot_config.PAIRLIST_MODES,
     )
 
 

@@ -77,7 +77,7 @@ def provision_bot(
     instance.container_name = name
     instance.internal_hostname = name
     instance.dry_run = desired_dry_run
-    instance.stake_currency = bot_config.effective(instance.user_config_json)["stake_currency"]
+    instance.stake_currency = bot_config.STAKE_CURRENCY
     instance.db_path = CONTAINER_DB_URL
     instance.api_username = creds.api_username
     instance.api_password_enc = vault.encrypt(creds.api_password)

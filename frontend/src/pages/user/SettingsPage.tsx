@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
 
 import { userApi } from "../../api/user";
-import type { BotConfig, BotConfigInput } from "../../api/types";
+import type { BotConfig, BotConfigInput, PairlistMode, RoiStep } from "../../api/types";
 
 export function SettingsPage() {
   const qc = useQueryClient();
@@ -18,43 +18,84 @@ export function SettingsPage() {
 
 function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void }) {
   const [strategy, setStrategy] = useState(data.strategy);
-  const [pairs, setPairs] = useState(data.pairs.join(", "));
-  const [stakeCurrency, setStakeCurrency] = useState(data.stake_currency);
+  const [pairlistMode, setPairlistMode] = useState<PairlistMode>(data.pairlist_mode);
+  const [pairs, setPairs] = useState<string[]>(data.pairs);
+  const [pairInput, setPairInput] = useState("");
+  const [volumeN, setVolumeN] = useState(String(data.volume_number_assets));
   const [stakeAmount, setStakeAmount] = useState(String(data.stake_amount));
   const [maxOpen, setMaxOpen] = useState(String(data.max_open_trades));
   const [stoploss, setStoploss] = useState(String(data.stoploss));
-  const [roi, setRoi] = useState(String(data.roi));
+  const [roiTable, setRoiTable] = useState<RoiStep[]>(data.roi_table);
   const [timeframe, setTimeframe] = useState(data.timeframe);
+  const [trailingStop, setTrailingStop] = useState(data.trailing_stop);
+  const [trailingPos, setTrailingPos] = useState(
+    data.trailing_stop_positive === null ? "" : String(data.trailing_stop_positive),
+  );
+  const [trailingOffset, setTrailingOffset] = useState(String(data.trailing_stop_positive_offset));
+  const [dryRunWallet, setDryRunWallet] = useState(String(data.dry_run_wallet));
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   // Keep the form in sync if the server data changes after a save.
   useEffect(() => {
     setStrategy(data.strategy);
-    setPairs(data.pairs.join(", "));
-    setStakeCurrency(data.stake_currency);
+    setPairlistMode(data.pairlist_mode);
+    setPairs(data.pairs);
+    setVolumeN(String(data.volume_number_assets));
     setStakeAmount(String(data.stake_amount));
     setMaxOpen(String(data.max_open_trades));
     setStoploss(String(data.stoploss));
-    setRoi(String(data.roi));
+    setRoiTable(data.roi_table);
     setTimeframe(data.timeframe);
+    setTrailingStop(data.trailing_stop);
+    setTrailingPos(
+      data.trailing_stop_positive === null ? "" : String(data.trailing_stop_positive),
+    );
+    setTrailingOffset(String(data.trailing_stop_positive_offset));
+    setDryRunWallet(String(data.dry_run_wallet));
   }, [data]);
+
+  // --- pairs (always BASE/USDT) ---
+  function addPair() {
+    const base = pairInput.trim().toUpperCase().replace(/\/USDT$/, "");
+    if (!base || !/^[A-Z0-9]+$/.test(base)) return;
+    const pair = `${base}/USDT`;
+    if (!pairs.includes(pair)) setPairs([...pairs, pair]);
+    setPairInput("");
+  }
+  function removePair(pair: string) {
+    setPairs(pairs.filter((p) => p !== pair));
+  }
+
+  // --- ROI table ---
+  function setRoiStep(i: number, patch: Partial<RoiStep>) {
+    setRoiTable(roiTable.map((s, idx) => (idx === i ? { ...s, ...patch } : s)));
+  }
+  function addRoiStep() {
+    const lastMin = roiTable.length ? Math.max(...roiTable.map((s) => s.minutes)) : 0;
+    setRoiTable([...roiTable, { minutes: lastMin + 30, roi: 0.05 }]);
+  }
+  function removeRoiStep(i: number) {
+    setRoiTable(roiTable.filter((_, idx) => idx !== i));
+  }
 
   const save = useMutation({
     mutationFn: () => {
       const body: BotConfigInput = {
         strategy,
-        pairs: pairs
-          .split(",")
-          .map((p) => p.trim())
-          .filter(Boolean),
-        stake_currency: stakeCurrency.toUpperCase(),
-        stake_amount: stakeAmount === "unlimited" ? "unlimited" : Number(stakeAmount),
+        pairlist_mode: pairlistMode,
         max_open_trades: Number(maxOpen),
+        stake_amount: stakeAmount === "unlimited" ? "unlimited" : Number(stakeAmount),
         stoploss: Number(stoploss),
-        roi: Number(roi),
+        roi_table: roiTable.map((s) => ({ minutes: Number(s.minutes), roi: Number(s.roi) })),
         timeframe,
+        trailing_stop: trailingStop,
+        trailing_stop_positive: trailingPos === "" ? null : Number(trailingPos),
+        trailing_stop_positive_offset: Number(trailingOffset),
+        dry_run_wallet: Number(dryRunWallet),
       };
+      if (pairlistMode === "volume") body.volume_number_assets = Number(volumeN);
+      else body.pairs = pairs;
       return userApi.saveConfig(body);
     },
     onSuccess: () => {
@@ -73,7 +114,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
       <h2>Bot settings</h2>
       <p className="muted">
         Saving applies your settings and restarts the bot. Live trading uses these too —
-        review carefully.
+        review carefully. All pairs are quoted in USDT.
       </p>
 
       <label>Strategy</label>
@@ -89,13 +130,68 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         return selected ? <p className="muted">{selected.description}</p> : null;
       })()}
 
-      <label>Pairs (comma-separated)</label>
-      <input value={pairs} onChange={(e) => setPairs(e.target.value)} placeholder="BTC/USDT, ETH/USDT" />
+      <label>Pair selection</label>
+      <select
+        value={pairlistMode}
+        onChange={(e) => setPairlistMode(e.target.value as PairlistMode)}
+      >
+        <option value="static">Manual list</option>
+        <option value="volume">Automatic — top by volume</option>
+      </select>
+
+      {pairlistMode === "static" ? (
+        <>
+          <label>Pairs (base coin, quoted in USDT)</label>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <input
+              value={pairInput}
+              onChange={(e) => setPairInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addPair();
+                }
+              }}
+              placeholder="e.g. BTC"
+              style={{ flex: 1 }}
+            />
+            <button type="button" onClick={addPair}>
+              Add
+            </button>
+          </div>
+          <div className="row">
+            {pairs.length === 0 && <span className="muted">No pairs added yet.</span>}
+            {pairs.map((p) => (
+              <span key={p} className="chip">
+                {p}
+                <button type="button" aria-label={`Remove ${p}`} onClick={() => removePair(p)}>
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
+          <label>Top N pairs by 24h volume</label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={volumeN}
+            onChange={(e) => setVolumeN(e.target.value)}
+          />
+          <p className="muted">
+            The bot auto-selects the {volumeN || "N"} highest-volume USDT pairs and refreshes
+            the list periodically.
+          </p>
+        </>
+      )}
 
       <div className="row">
         <div style={{ flex: 1 }}>
           <label>Stake currency</label>
-          <input value={stakeCurrency} onChange={(e) => setStakeCurrency(e.target.value)} />
+          <input value="USDT" disabled />
         </div>
         <div style={{ flex: 1 }}>
           <label>Stake amount ("unlimited" or number)</label>
@@ -119,10 +215,6 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
           <input type="number" step="0.01" value={stoploss} onChange={(e) => setStoploss(e.target.value)} />
         </div>
         <div style={{ flex: 1 }}>
-          <label>Take-profit ROI (e.g. 0.10)</label>
-          <input type="number" step="0.01" value={roi} onChange={(e) => setRoi(e.target.value)} />
-        </div>
-        <div style={{ flex: 1 }}>
           <label>Timeframe</label>
           <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
             {data.available_timeframes.map((t) => (
@@ -132,7 +224,89 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
             ))}
           </select>
         </div>
+        <div style={{ flex: 1 }}>
+          <label>Dry-run wallet</label>
+          <input
+            type="number"
+            step="1"
+            min={0}
+            value={dryRunWallet}
+            onChange={(e) => setDryRunWallet(e.target.value)}
+          />
+        </div>
       </div>
+
+      <label style={{ marginTop: 12 }}>Take-profit ROI table</label>
+      <p className="muted">
+        Take {`{ROI}`} profit after {`{minutes}`} minutes. The step at 0 minutes is the
+        initial target; later steps lower the bar over time.
+      </p>
+      {roiTable.map((step, i) => (
+        <div className="row" key={i} style={{ marginBottom: 6 }}>
+          <div style={{ flex: 1 }}>
+            <input
+              type="number"
+              min={0}
+              step="1"
+              value={String(step.minutes)}
+              onChange={(e) => setRoiStep(i, { minutes: Number(e.target.value) })}
+              placeholder="minutes"
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <input
+              type="number"
+              step="0.01"
+              value={String(step.roi)}
+              onChange={(e) => setRoiStep(i, { roi: Number(e.target.value) })}
+              placeholder="roi (e.g. 0.10)"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => removeRoiStep(i)}
+            disabled={roiTable.length <= 1}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={addRoiStep}>
+        Add ROI step
+      </button>
+
+      <label style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+        <input
+          type="checkbox"
+          checked={trailingStop}
+          onChange={(e) => setTrailingStop(e.target.checked)}
+          style={{ width: "auto" }}
+        />
+        Enable trailing stop
+      </label>
+      {trailingStop && (
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <label>Trailing positive (optional, e.g. 0.01)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={trailingPos}
+              onChange={(e) => setTrailingPos(e.target.value)}
+              placeholder="leave empty to trail from stoploss"
+            />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label>Trailing offset (must exceed positive)</label>
+            <input
+              type="number"
+              step="0.01"
+              value={trailingOffset}
+              onChange={(e) => setTrailingOffset(e.target.value)}
+            />
+          </div>
+        </div>
+      )}
 
       <div style={{ marginTop: 16 }}>
         <button onClick={() => save.mutate()} disabled={save.isPending}>

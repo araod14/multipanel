@@ -10,6 +10,7 @@ from copy import deepcopy
 from typing import Any
 
 from app.config import get_settings
+from app.services import bot_config
 
 # A minimal, valid base config modelled on Freqtrade's example config.json.
 # ``timeframe``, ``stoploss`` and ``minimal_roi`` are supplied by the strategy.
@@ -62,23 +63,47 @@ def build_bot_config(
     :param exchange_name: ccxt exchange id (e.g. ``binance``).
     :param dry_run: when ``True`` no real orders are placed.
     :param user_config: validated user-editable settings (see ``services.bot_config``):
-        pairs, stake_currency, stake_amount, max_open_trades, stoploss, roi, timeframe.
+        pairlist_mode, pairs, volume_number_assets, stake_amount, max_open_trades,
+        stoploss, roi_table, timeframe, trailing_stop*, dry_run_wallet.
     """
     settings = get_settings()
     config = deepcopy(_BASE_CONFIG)
 
     config["bot_name"] = username
     config["dry_run"] = dry_run
+    config["dry_run_wallet"] = user_config["dry_run_wallet"]
     config["exchange"]["name"] = exchange_name
 
-    # Apply the user-editable, schema-safe fields.
-    config["stake_currency"] = user_config["stake_currency"]
+    # Apply the user-editable, schema-safe fields. The quote currency is fixed to USDT.
+    config["stake_currency"] = bot_config.STAKE_CURRENCY
     config["stake_amount"] = user_config["stake_amount"]
     config["max_open_trades"] = user_config["max_open_trades"]
     config["stoploss"] = user_config["stoploss"]
-    config["minimal_roi"] = {"0": user_config["roi"]}
+    config["minimal_roi"] = {str(s["minutes"]): s["roi"] for s in user_config["roi_table"]}
     config["timeframe"] = user_config["timeframe"]
-    config["exchange"]["pair_whitelist"] = list(user_config["pairs"])
+
+    # Trailing stop: only emit the positive/offset knobs when actually enabled.
+    config["trailing_stop"] = user_config["trailing_stop"]
+    if user_config["trailing_stop"] and user_config["trailing_stop_positive"] is not None:
+        config["trailing_stop_positive"] = user_config["trailing_stop_positive"]
+        if user_config["trailing_stop_positive_offset"] > 0:
+            config["trailing_stop_positive_offset"] = user_config["trailing_stop_positive_offset"]
+            config["trailing_only_offset_is_reached"] = True
+
+    # Pairlist: a manual static whitelist, or top-N-by-volume auto-discovery.
+    if user_config["pairlist_mode"] == "volume":
+        config["pairlists"] = [
+            {
+                "method": "VolumePairList",
+                "number_assets": user_config["volume_number_assets"],
+                "sort_key": "quoteVolume",
+                "refresh_period": 1800,
+            }
+        ]
+        config["exchange"]["pair_whitelist"] = []  # VolumePairList generates it
+    else:
+        config["pairlists"] = [{"method": "StaticPairList"}]
+        config["exchange"]["pair_whitelist"] = list(user_config["pairs"])
 
     # api_server: secrets injected via env, so they are intentionally absent here.
     config["api_server"] = {
