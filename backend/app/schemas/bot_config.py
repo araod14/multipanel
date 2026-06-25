@@ -40,6 +40,7 @@ class BotConfigOut(BaseModel):
     available_strategies: list[StrategyOption]
     available_timeframes: list[str]
     available_pairlist_modes: list[str]
+    available_base_coins: list[str]
 
 
 class BotConfigIn(BaseModel):

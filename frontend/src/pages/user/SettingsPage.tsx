@@ -20,7 +20,6 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
   const [strategy, setStrategy] = useState(data.strategy);
   const [pairlistMode, setPairlistMode] = useState<PairlistMode>(data.pairlist_mode);
   const [pairs, setPairs] = useState<string[]>(data.pairs);
-  const [pairInput, setPairInput] = useState("");
   const [volumeN, setVolumeN] = useState(String(data.volume_number_assets));
   const [stakeAmount, setStakeAmount] = useState(String(data.stake_amount));
   const [maxOpen, setMaxOpen] = useState(String(data.max_open_trades));
@@ -55,17 +54,18 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
     setDryRunWallet(String(data.dry_run_wallet));
   }, [data]);
 
-  // --- pairs (always BASE/USDT) ---
-  function addPair() {
-    const base = pairInput.trim().toUpperCase().replace(/\/USDT$/, "");
-    if (!base || !/^[A-Z0-9]+$/.test(base)) return;
-    const pair = `${base}/USDT`;
+  // --- pairs (always BASE/USDT), chosen from a dropdown of base coins ---
+  function addCoin(coin: string) {
+    if (!coin) return;
+    const pair = `${coin}/USDT`;
     if (!pairs.includes(pair)) setPairs([...pairs, pair]);
-    setPairInput("");
   }
   function removePair(pair: string) {
     setPairs(pairs.filter((p) => p !== pair));
   }
+  // Coins not yet added (compare against the BASE part of each selected pair).
+  const selectedCoins = new Set(pairs.map((p) => p.split("/")[0]));
+  const availableCoins = data.available_base_coins.filter((c) => !selectedCoins.has(c));
 
   // --- ROI table ---
   function setRoiStep(i: number, patch: Partial<RoiStep>) {
@@ -141,24 +141,25 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
 
       {pairlistMode === "static" ? (
         <>
-          <label>Pairs (base coin, quoted in USDT)</label>
-          <div className="row" style={{ marginBottom: 8 }}>
-            <input
-              value={pairInput}
-              onChange={(e) => setPairInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  addPair();
-                }
-              }}
-              placeholder="e.g. BTC"
-              style={{ flex: 1 }}
-            />
-            <button type="button" onClick={addPair}>
-              Add
-            </button>
-          </div>
+          <label>Pairs (choose a coin — quoted in USDT)</label>
+          <select
+            value=""
+            onChange={(e) => {
+              addCoin(e.target.value);
+              e.target.value = "";
+            }}
+            disabled={availableCoins.length === 0}
+            style={{ marginBottom: 8 }}
+          >
+            <option value="" disabled>
+              {availableCoins.length === 0 ? "All coins added" : "Add a coin…"}
+            </option>
+            {availableCoins.map((c) => (
+              <option key={c} value={c}>
+                {c}/USDT
+              </option>
+            ))}
+          </select>
           <div className="row">
             {pairs.length === 0 && <span className="muted">No pairs added yet.</span>}
             {pairs.map((p) => (

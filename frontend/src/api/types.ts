@@ -70,6 +70,7 @@ export interface BotConfig {
   available_strategies: StrategyOption[];
   available_timeframes: string[];
   available_pairlist_modes: PairlistMode[];
+  available_base_coins: string[];
 }
 
 export type BotConfigInput = Partial<

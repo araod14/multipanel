@@ -82,6 +82,7 @@ def _config_out(instance: BotInstance) -> BotConfigOut:
         ],
         available_timeframes=bot_config.ALLOWED_TIMEFRAMES,
         available_pairlist_modes=bot_config.PAIRLIST_MODES,
+        available_base_coins=bot_config.COMMON_BASE_COINS,
     )
 
 

@@ -12,6 +12,19 @@ from app.services import strategy_assets
 ALLOWED_TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
 PAIRLIST_MODES = ["static", "volume"]
 
+# Curated base coins offered in the manual pair picker (each becomes BASE/USDT).
+# BNB is intentionally absent: BNB/.* is in the config pair_blacklist, so it would
+# never trade. Extend this list to offer more coins.
+COMMON_BASE_COINS = sorted(
+    [
+        "BTC", "ETH", "SOL", "XRP", "ADA", "AVAX", "DOGE", "DOT", "TRX", "LINK",
+        "MATIC", "POL", "LTC", "BCH", "UNI", "ATOM", "XLM", "ETC", "FIL", "APT",
+        "ARB", "OP", "NEAR", "INJ", "SUI", "SEI", "TIA", "RNDR", "IMX", "AAVE",
+        "MKR", "GRT", "SAND", "MANA", "AXS", "FTM", "ALGO", "EGLD", "FLOW", "CHZ",
+        "CRV", "COMP", "SNX", "DYDX", "LDO", "PEPE", "SHIB", "WIF", "BONK", "USDC",
+    ]
+)
+
 # The quote currency is fixed: every pair is BASE/USDT and stakes are in USDT.
 STAKE_CURRENCY = "USDT"
 
