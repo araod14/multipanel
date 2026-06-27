@@ -265,3 +265,56 @@ pre.logs {
   font-size: 12px;
   white-space: pre-wrap;
 }
+
+/* Diverging profit bar for open trades (0 at the center). */
+.profit-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profit-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.profit-text.pos {
+  color: var(--green);
+}
+
+.profit-text.neg {
+  color: var(--red);
+}
+
+.profit-bar {
+  position: relative;
+  width: 120px;
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.profit-bar .center {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.profit-bar .fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+}
+
+.profit-bar .fill.pos {
+  left: 50%;
+  background: var(--green);
+}
+
+.profit-bar .fill.neg {
+  right: 50%;
+  background: var(--red);
+}

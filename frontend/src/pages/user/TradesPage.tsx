@@ -6,7 +6,7 @@ export function TradesPage() {
   const qc = useQueryClient();
   const trades = useQuery({
     queryKey: ["me-trades"],
-    queryFn: () => userApi.trades() as Promise<any>,
+    queryFn: () => userApi.status() as Promise<any>,
     retry: false,
     refetchInterval: 15000,
   });
@@ -16,7 +16,10 @@ export function TradesPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["me-trades"] }),
   });
 
-  const rows: any[] = trades.data?.trades ?? [];
+  // /status returns an array of open trades directly; tolerate a {trades:[]} shape too.
+  const rows: any[] = Array.isArray(trades.data)
+    ? trades.data
+    : trades.data?.trades ?? [];
 
   return (
     <div className="card">
@@ -45,7 +48,7 @@ export function TradesPage() {
                 <td>{t.amount}</td>
                 <td>{t.open_rate}</td>
                 <td>
-                  {typeof t.profit_ratio === "number" ? `${(t.profit_ratio * 100).toFixed(2)}%` : "—"}
+                  <ProfitCell pct={typeof t.profit_ratio === "number" ? t.profit_ratio * 100 : null} />
                 </td>
                 <td style={{ textAlign: "right" }}>
                   <button
@@ -61,6 +64,29 @@ export function TradesPage() {
           </tbody>
         </table>
       )}
+    </div>
+  );
+}
+
+// % at which the diverging bar reaches its full half-width (visual saturation cap).
+const PROFIT_BAR_CAP = 10;
+
+/** Renders the profit % plus a diverging bar: green to the right for gains, red to
+ *  the left for losses, with 0 at the center. */
+function ProfitCell({ pct }: { pct: number | null }) {
+  if (pct === null) return <>—</>;
+  const sign = pct >= 0 ? "pos" : "neg";
+  const width = `${Math.min(Math.abs(pct) / PROFIT_BAR_CAP, 1) * 50}%`;
+  return (
+    <div className="profit-cell">
+      <span className={`profit-text ${sign}`}>
+        {pct >= 0 ? "+" : ""}
+        {pct.toFixed(2)}%
+      </span>
+      <div className="profit-bar" aria-hidden="true">
+        <div className="center" />
+        <div className={`fill ${sign}`} style={{ width }} />
+      </div>
     </div>
   );
 }
