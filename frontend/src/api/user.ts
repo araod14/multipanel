@@ -24,6 +24,7 @@ export const userApi = {
   status: () => userApi.ft("status"),
   profit: () => userApi.ft("profit"),
   balance: () => userApi.ft("balance"),
+  whitelist: () => userApi.ft("whitelist"),
   daily: () => userApi.ft("daily"),
   trades: () => userApi.ft("trades"),
   logs: () => userApi.ft("logs"),

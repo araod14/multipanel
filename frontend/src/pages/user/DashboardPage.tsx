@@ -17,6 +17,12 @@ export function DashboardPage() {
     retry: false,
     refetchInterval: 15000,
   });
+  const whitelist = useQuery({
+    queryKey: ["me-whitelist"],
+    queryFn: () => userApi.whitelist() as Promise<any>,
+    retry: false,
+    refetchInterval: 30000,
+  });
 
   return (
     <>
@@ -46,6 +52,29 @@ export function DashboardPage() {
             <Metric label="Open trades" value={profit.data?.trade_count ?? "—"} />
             <Metric label="Winning trades" value={profit.data?.winning_trades ?? "—"} />
           </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Trading pairs</h2>
+        {whitelist.isError ? (
+          <p className="muted">Unavailable (bot starting or stopped).</p>
+        ) : (whitelist.data?.whitelist?.length ?? 0) === 0 ? (
+          <p className="muted">No pairs configured.</p>
+        ) : (
+          <>
+            <p className="muted">
+              {whitelist.data.whitelist.length} pairs
+              {whitelist.data.method?.length ? ` · ${whitelist.data.method.join(", ")}` : ""}
+            </p>
+            <div className="row">
+              {whitelist.data.whitelist.map((pair: string) => (
+                <span key={pair} className="chip chip--plain">
+                  {pair}
+                </span>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
