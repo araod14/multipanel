@@ -27,6 +27,7 @@ _ALLOWED_EXACT: set[tuple[str, str]] = {
     ("GET", "weekly"),
     ("GET", "monthly"),
     ("GET", "performance"),
+    ("GET", "stats"),
     ("GET", "trades"),
     ("GET", "whitelist"),
     ("GET", "blacklist"),

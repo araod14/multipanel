@@ -1,21 +1,35 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { userApi } from "../../api/user";
+import type { FtPerformanceEntry } from "../../api/types";
 import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
+import { fmt, pct, signed } from "../../lib/format";
 
 export function DashboardPage() {
   const bot = useQuery({ queryKey: ["me-bot"], queryFn: userApi.myBot, retry: false });
   const profit = useQuery({
     queryKey: ["me-profit"],
-    queryFn: () => userApi.profit() as Promise<any>,
+    queryFn: userApi.profit,
     retry: false,
     refetchInterval: 15000,
   });
   const balance = useQuery({
     queryKey: ["me-balance"],
-    queryFn: () => userApi.balance() as Promise<any>,
+    queryFn: userApi.balance,
     retry: false,
     refetchInterval: 15000,
+  });
+  const performance = useQuery({
+    queryKey: ["me-performance"],
+    queryFn: userApi.performance,
+    retry: false,
+    refetchInterval: 30000,
+  });
+  const stats = useQuery({
+    queryKey: ["me-stats"],
+    queryFn: userApi.stats,
+    retry: false,
+    refetchInterval: 30000,
   });
   const whitelist = useQuery({
     queryKey: ["me-whitelist"],
@@ -23,6 +37,16 @@ export function DashboardPage() {
     retry: false,
     refetchInterval: 30000,
   });
+
+  const stake = bot.data?.stake_currency ?? balance.data?.stake ?? "";
+  const p = profit.data;
+
+  // Rank pairs by absolute profit for the winners / losers columns.
+  const perf = performance.data ?? [];
+  const winners = [...perf].filter((e) => e.profit_abs > 0).sort((a, b) => b.profit_abs - a.profit_abs).slice(0, 5);
+  const losers = [...perf].filter((e) => e.profit_abs < 0).sort((a, b) => a.profit_abs - b.profit_abs).slice(0, 5);
+
+  const exitReasons = stats.data ? Object.entries(stats.data.exit_reasons) : [];
 
   return (
     <>
@@ -47,10 +71,83 @@ export function DashboardPage() {
           <p className="muted">Unavailable (bot starting or stopped).</p>
         ) : (
           <div className="grid">
-            <Metric label="Closed profit" value={fmt(profit.data?.profit_closed_coin)} />
-            <Metric label="Total profit %" value={pct(profit.data?.profit_all_percent)} />
-            <Metric label="Open trades" value={profit.data?.trade_count ?? "—"} />
-            <Metric label="Winning trades" value={profit.data?.winning_trades ?? "—"} />
+            <Metric
+              label="Closed profit"
+              value={`${signed(p?.profit_closed_coin)} ${stake}`}
+              sub={pct(p?.profit_closed_ratio)}
+              tone={p?.profit_closed_coin}
+            />
+            <Metric
+              label="Total profit"
+              value={`${signed(p?.profit_all_coin)} ${stake}`}
+              sub={pct(p?.profit_all_ratio)}
+              tone={p?.profit_all_coin}
+            />
+            <Metric label="Closed trades" value={p?.closed_trade_count ?? "—"} />
+            <Metric label="Winrate" value={pct(p?.winrate)} />
+            <Metric label="Ganados" value={p?.winning_trades ?? "—"} tone={1} />
+            <Metric label="Perdidos" value={p?.losing_trades ?? "—"} tone={p?.losing_trades ? -1 : 0} />
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Estrategia</h2>
+        {profit.isError ? (
+          <p className="muted">Unavailable (bot starting or stopped).</p>
+        ) : (
+          <>
+            <div className="grid">
+              <Metric label="Profit factor" value={fmt(p?.profit_factor, 2)} />
+              <Metric label="Expectancy" value={fmt(p?.expectancy, 4)} />
+              <Metric label="Duración media" value={p?.avg_duration || "—"} />
+              <Metric
+                label="Max drawdown"
+                value={pct(p?.max_drawdown)}
+                tone={p?.max_drawdown ? -1 : 0}
+              />
+              <Metric label="Mejor par" value={p?.best_pair || "—"} sub={p ? signed(p.best_pair_profit_abs) : undefined} />
+            </div>
+
+            <h3 className="subhead">Razones de salida</h3>
+            {stats.isError || exitReasons.length === 0 ? (
+              <p className="muted">Sin datos de salidas todavía.</p>
+            ) : (
+              <table>
+                <thead>
+                  <tr>
+                    <th>Razón</th>
+                    <th>Ganados</th>
+                    <th>Perdidos</th>
+                    <th>Empates</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exitReasons.map(([reason, s]) => (
+                    <tr key={reason}>
+                      <td>{reason}</td>
+                      <td className="amt pos">{s.wins}</td>
+                      <td className="amt neg">{s.losses}</td>
+                      <td className="muted">{s.draws}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Monedas</h2>
+        {performance.isError ? (
+          <p className="muted">Unavailable (bot starting or stopped).</p>
+        ) : perf.length === 0 ? (
+          <p className="muted">Aún no hay trades cerrados.</p>
+        ) : (
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+            <PairRanking title="Más ganadoras" entries={winners} empty="Sin ganadoras aún." stake={stake} />
+            <PairRanking title="Más perdedoras" entries={losers} empty="Sin perdedoras aún." stake={stake} />
           </div>
         )}
       </div>
@@ -84,8 +181,10 @@ export function DashboardPage() {
           <p className="muted">Unavailable.</p>
         ) : (
           <div className="grid">
-            <Metric label="Total" value={fmt(balance.data?.total)} />
-            <Metric label="Currencies" value={balance.data?.currencies?.length ?? "—"} />
+            <Metric label="Total" value={`${fmt(balance.data?.total)} ${stake}`} />
+            <Metric label="Gestionado por el bot" value={`${fmt(balance.data?.total_bot)} ${stake}`} />
+            <Metric label="Capital inicial" value={`${fmt(balance.data?.starting_capital)} ${stake}`} />
+            <Metric label="Monedas" value={balance.data?.currencies?.length ?? "—"} />
           </div>
         )}
       </div>
@@ -93,18 +192,58 @@ export function DashboardPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: React.ReactNode }) {
+function PairRanking({
+  title,
+  entries,
+  empty,
+  stake,
+}: {
+  title: string;
+  entries: FtPerformanceEntry[];
+  empty: string;
+  stake: string;
+}) {
   return (
-    <div className="metric">
-      <div className="muted">{label}</div>
-      <div className="v">{value}</div>
+    <div>
+      <h3 className="subhead">{title}</h3>
+      {entries.length === 0 ? (
+        <p className="muted">{empty}</p>
+      ) : (
+        <table>
+          <tbody>
+            {entries.map((e) => (
+              <tr key={e.pair}>
+                <td>{e.pair}</td>
+                <td className={`amt ${e.profit_abs >= 0 ? "pos" : "neg"}`}>
+                  {signed(e.profit_abs)} {stake}
+                </td>
+                <td className="muted">{e.count} trades</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }
 
-function fmt(n: unknown): string {
-  return typeof n === "number" ? n.toFixed(4) : "—";
-}
-function pct(n: unknown): string {
-  return typeof n === "number" ? `${(n * 100).toFixed(2)}%` : "—";
+function Metric({
+  label,
+  value,
+  sub,
+  tone,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub?: React.ReactNode;
+  tone?: number;
+}) {
+  const toneClass = typeof tone === "number" && tone !== 0 ? (tone > 0 ? "pos" : "neg") : "";
+  return (
+    <div className="metric">
+      <div className="muted">{label}</div>
+      <div className={`v ${toneClass}`}>{value}</div>
+      {sub !== undefined && <div className="muted">{sub}</div>}
+    </div>
+  );
 }

@@ -91,3 +91,85 @@ export type BotConfigInput = Partial<
     | "dry_run_wallet"
   >
 >;
+
+// --- Freqtrade REST responses (subset of fields we actually consume) ---
+// These mirror the per-bot Freqtrade API forwarded through /me/bot/ft/*.
+
+/** GET /profit — aggregate trade statistics. */
+export interface FtProfit {
+  profit_closed_coin: number;
+  profit_closed_ratio: number;
+  profit_all_coin: number;
+  profit_all_ratio: number;
+  winning_trades: number;
+  losing_trades: number;
+  winrate: number;
+  profit_factor: number;
+  expectancy: number;
+  avg_duration: string;
+  best_pair: string;
+  best_pair_profit_abs: number;
+  max_drawdown: number;
+  closed_trade_count: number;
+  trade_count: number;
+}
+
+/** GET /performance — one entry per traded pair. */
+export interface FtPerformanceEntry {
+  pair: string;
+  profit_abs: number;
+  profit_ratio: number;
+  count: number;
+}
+
+/** A single closed trade from GET /trades. */
+export interface FtTrade {
+  trade_id: number;
+  pair: string;
+  is_short: boolean;
+  strategy: string;
+  profit_abs: number;
+  profit_ratio: number;
+  close_profit_abs: number | null;
+  open_date: string;
+  close_date: string | null;
+  exit_reason: string | null;
+}
+
+/** GET /trades?limit=&offset= — paginated closed-trade history. */
+export interface FtTradesResponse {
+  trades: FtTrade[];
+  trades_count: number;
+  offset: number;
+  total_trades: number;
+}
+
+/** One currency line from GET /balance. */
+export interface FtBalanceCurrency {
+  currency: string;
+  free: number;
+  balance: number;
+  est_stake: number;
+}
+
+/** GET /balance — wallet balances. */
+export interface FtBalance {
+  currencies: FtBalanceCurrency[];
+  total: number;
+  total_bot: number;
+  symbol: string;
+  stake: string;
+  starting_capital: number;
+}
+
+/** GET /stats — win/loss breakdown by exit reason and durations. */
+export interface FtExitReasonStat {
+  wins: number;
+  losses: number;
+  draws: number;
+}
+
+export interface FtStats {
+  exit_reasons: Record<string, FtExitReasonStat>;
+  durations: Record<string, number | null>;
+}

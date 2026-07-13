@@ -12,6 +12,7 @@ export function UserLayout() {
           Dashboard
         </NavLink>
         <NavLink to="/app/trades">Trades</NavLink>
+        <NavLink to="/app/history">Historial</NavLink>
         <NavLink to="/app/controls">Controls</NavLink>
         <NavLink to="/app/settings">Settings</NavLink>
         <div className="spacer" />

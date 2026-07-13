@@ -1,5 +1,14 @@
 import { api } from "./client";
-import type { BotConfig, BotConfigInput, BotInstance } from "./types";
+import type {
+  BotConfig,
+  BotConfigInput,
+  BotInstance,
+  FtBalance,
+  FtPerformanceEntry,
+  FtProfit,
+  FtStats,
+  FtTradesResponse,
+} from "./types";
 
 // The user API is a guarded proxy: /me/bot/ft/<path> forwards to the user's own
 // Freqtrade instance. Responses are passed through as-is, so these are loosely typed.
@@ -22,11 +31,16 @@ export const userApi = {
   },
   // Convenience wrappers for the common endpoints.
   status: () => userApi.ft("status"),
-  profit: () => userApi.ft("profit"),
-  balance: () => userApi.ft("balance"),
+  profit: () => userApi.ft<FtProfit>("profit"),
+  balance: () => userApi.ft<FtBalance>("balance"),
+  performance: () => userApi.ft<FtPerformanceEntry[]>("performance"),
+  stats: () => userApi.ft<FtStats>("stats"),
   whitelist: () => userApi.ft("whitelist"),
   daily: () => userApi.ft("daily"),
   trades: () => userApi.ft("trades"),
+  // Closed-trade history, newest first.
+  history: (limit = 200) =>
+    userApi.ft<FtTradesResponse>(`trades?limit=${limit}&order_by_id=false`),
   logs: () => userApi.ft("logs"),
   start: () => userApi.ftPost("start"),
   stop: () => userApi.ftPost("stop"),

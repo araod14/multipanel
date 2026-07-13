@@ -9,6 +9,7 @@ import { UserDetailPage } from "./pages/admin/UserDetailPage";
 import { UserLayout } from "./pages/user/UserLayout";
 import { DashboardPage } from "./pages/user/DashboardPage";
 import { TradesPage } from "./pages/user/TradesPage";
+import { HistoryPage } from "./pages/user/HistoryPage";
 import { ControlsPage } from "./pages/user/ControlsPage";
 import { SettingsPage } from "./pages/user/SettingsPage";
 
@@ -44,6 +45,7 @@ export function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="trades" element={<TradesPage />} />
+        <Route path="history" element={<HistoryPage />} />
         <Route path="controls" element={<ControlsPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

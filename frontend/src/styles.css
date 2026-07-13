@@ -255,6 +255,46 @@ button:disabled {
   margin-top: 4px;
 }
 
+.metric .v.pos {
+  color: var(--green);
+}
+
+.metric .v.neg {
+  color: var(--red);
+}
+
+/* Section sub-heading inside a card (e.g. "Razones de salida"). */
+.subhead {
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 18px 0 8px;
+}
+
+/* Colored absolute amount in tables (profit/loss). */
+.amt {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.amt.pos {
+  color: var(--green);
+}
+
+.amt.neg {
+  color: var(--red);
+}
+
+/* Won / lost rows in the trade history. */
+tr.win td:first-child {
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+tr.loss td:first-child {
+  box-shadow: inset 3px 0 0 var(--red);
+}
+
 pre.logs {
   background: #0b0f14;
   border: 1px solid var(--border);
