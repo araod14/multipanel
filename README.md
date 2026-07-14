@@ -20,6 +20,52 @@ control plane securely proxies to that instance's REST API.
 - **Secure by construction** — exchange keys encrypted at rest; bots on an internal
   network with no public ports; only the TLS-terminated control plane is exposed.
 
+## Dashboard metrics
+
+The user dashboard surfaces Freqtrade's own trade statistics (`GET /profit`, `/performance`,
+`/stats`). All amounts are in the bot's **stake currency** — fiat conversion is disabled on
+purpose (it makes a blocking CoinGecko call at startup).
+
+| Metric | What it means |
+| --- | --- |
+| **Closed profit** | Realized profit from trades that have already been closed. |
+| **Total profit** | Closed profit **plus** the current unrealized profit of open trades. |
+| **Winrate** | Share of closed trades that ended in profit (`winning / closed`). |
+| **Profit factor** | Gross profit of winners ÷ gross loss of losers — see below. |
+| **Expectancy** | Average profit expected per trade, in stake currency. |
+| **Max drawdown** | Largest peak-to-trough drop in equity; a risk measure, lower is better. |
+
+### Profit factor
+
+```
+profit factor = Σ profit of winning trades / |Σ loss of losing trades|
+```
+
+It answers *"how much do I win for every unit I lose?"* — a value of `3.0` means 3 units
+gained per 1 unit lost.
+
+| Value | Reading |
+| --- | --- |
+| `> 1` | Wins outweigh losses (profitable) |
+| `= 1` | Break-even |
+| `< 1` | Losses outweigh wins |
+| `∞` | **No losing trades yet** (see below) |
+
+Rules of thumb: below `1` the strategy is not viable, `1`–`1.5` is marginal (fees eat the
+edge), above `~2` is solid. With few closed trades the number is very noisy — always read
+it next to the trade count and winrate.
+
+It is **not** the winrate: a strategy can win only 30% of its trades and still have a great
+profit factor if the winners are far larger than the losers.
+
+> **Why it can show `∞`.** Freqtrade computes
+> `winning_profit / abs(losing_profit) if losing_profit else float("inf")`
+> ([`rpc.py`](https://github.com/freqtrade/freqtrade/blob/develop/freqtrade/rpc/rpc.py)), so a
+> bot with **zero losing trades** yields infinity. Pydantic serializes that as `null` in the
+> JSON response, so the dashboard renders `∞ / sin pérdidas aún` rather than a blank `—`
+> (which is reserved for "no data yet"). It is not an error — it means nothing has lost yet,
+> and the value becomes finite as soon as the first losing trade closes.
+
 ## Architecture
 
 ```

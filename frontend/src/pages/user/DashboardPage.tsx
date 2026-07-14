@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { userApi } from "../../api/user";
-import type { FtPerformanceEntry } from "../../api/types";
+import type { FtPerformanceEntry, FtProfit } from "../../api/types";
 import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
 import { fmt, pct, signed } from "../../lib/format";
 
@@ -47,6 +47,7 @@ export function DashboardPage() {
   const losers = [...perf].filter((e) => e.profit_abs < 0).sort((a, b) => a.profit_abs - b.profit_abs).slice(0, 5);
 
   const exitReasons = stats.data ? Object.entries(stats.data.exit_reasons) : [];
+  const pf = profitFactor(p);
 
   return (
     <>
@@ -98,7 +99,7 @@ export function DashboardPage() {
         ) : (
           <>
             <div className="grid">
-              <Metric label="Profit factor" value={fmt(p?.profit_factor, 2)} />
+              <Metric label="Profit factor" value={pf.value} sub={pf.sub} />
               <Metric label="Expectancy" value={fmt(p?.expectancy, 4)} />
               <Metric label="Duración media" value={p?.avg_duration || "—"} />
               <Metric
@@ -190,6 +191,20 @@ export function DashboardPage() {
       </div>
     </>
   );
+}
+
+/** Freqtrade computes `winning_profit / abs(losing_profit)`, which is infinite when a bot
+ *  has no losing trades; Pydantic serializes that as null. Distinguish that case from
+ *  "no data yet" so a flawless bot reads as ∞ rather than an empty dash. */
+function profitFactor(p: FtProfit | undefined): { value: string; sub?: string } {
+  if (!p) return { value: "—" };
+  if (typeof p.profit_factor === "number" && Number.isFinite(p.profit_factor)) {
+    return { value: fmt(p.profit_factor, 2) };
+  }
+  if (p.closed_trade_count > 0 && p.losing_trades === 0) {
+    return { value: "∞", sub: "sin pérdidas aún" };
+  }
+  return { value: "—" };
 }
 
 function PairRanking({

@@ -104,7 +104,8 @@ export interface FtProfit {
   winning_trades: number;
   losing_trades: number;
   winrate: number;
-  profit_factor: number;
+  // Infinite when there are no losing trades, which serializes to null over JSON.
+  profit_factor: number | null;
   expectancy: number;
   avg_duration: string;
   best_pair: string;
