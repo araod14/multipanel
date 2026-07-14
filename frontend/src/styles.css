@@ -272,6 +272,11 @@ button:disabled {
   margin: 18px 0 8px;
 }
 
+/* Plain numeric cell (rates, prices). */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Colored absolute amount in tables (profit/loss). */
 .amt {
   font-variant-numeric: tabular-nums;

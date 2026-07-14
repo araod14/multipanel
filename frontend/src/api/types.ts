@@ -131,6 +131,8 @@ export interface FtTrade {
   profit_abs: number;
   profit_ratio: number;
   close_profit_abs: number | null;
+  open_rate: number;
+  close_rate: number | null;
   open_date: string;
   close_date: string | null;
   exit_reason: string | null;

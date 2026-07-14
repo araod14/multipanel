@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { userApi } from "../../api/user";
 import type { FtTrade } from "../../api/types";
 import { ProfitCell } from "../../components/ProfitCell";
-import { signed } from "../../lib/format";
+import { price, signed } from "../../lib/format";
 
 export function HistoryPage() {
   const history = useQuery({
@@ -42,10 +42,12 @@ export function HistoryPage() {
             <tr>
               <th>Par</th>
               <th>Lado</th>
+              <th>Entrada</th>
+              <th>Salida</th>
               <th>Cierre</th>
               <th>Profit %</th>
               <th>Profit</th>
-              <th>Salida</th>
+              <th>Motivo</th>
             </tr>
           </thead>
           <tbody>
@@ -60,6 +62,8 @@ export function HistoryPage() {
                       {t.is_short ? "short" : "long"}
                     </span>
                   </td>
+                  <td className="num">{price(t.open_rate)}</td>
+                  <td className="num">{price(t.close_rate)}</td>
                   <td className="muted">{shortDate(t.close_date)}</td>
                   <td>
                     <ProfitCell
