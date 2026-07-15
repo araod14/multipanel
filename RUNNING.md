@@ -55,9 +55,9 @@ make dev-start EXCHANGE=kraken      # default in dev is already kraken
 As **admin** (`/admin`):
 1. **Create a user** (username, email, password).
 2. Open the user → **Provision bot**. A `cp-bot-<username>` container starts in dry-run.
-3. *(For live trading)* add the user's **exchange API key/secret** — encrypted at rest and
-   injected into the container; never written to disk.
-4. *(Optional)* flip the bot to **LIVE** (requires stored exchange credentials).
+3. *(For live trading)* add the user's **exchange API key/secret** — verified against the
+   exchange, then encrypted at rest and injected into the container; never written to disk.
+4. *(Optional)* flip the bot to **LIVE** — see the ladder below.
 
 As that **user** (`/app`):
 - **Dashboard** — status, performance, balance.
@@ -67,6 +67,53 @@ As that **user** (`/app`):
 - **Trades** — open positions.
 
 Everything a user does is proxied only to **their own** bot.
+
+---
+
+## 2b. Going live with real money (Binance)
+
+**There is no testnet, and that is not an omission.** Freqtrade does not support sandbox
+accounts (`docs/faq.md`: *"Does freqtrade support sandbox accounts? No"*) because sandbox
+markets have unrealistic order books and liquidity. Binance's testnet exists but Freqtrade
+disables it deliberately (`supports_demo_trading: False`, *"a separate market — not a
+simulated live market"*). **Dry-run is the rehearsal** — it runs against real prices and
+real order books, and it is the only one Freqtrade considers meaningful.
+
+So the ladder has exactly three rungs:
+
+1. **Dry-run** (the default). Validates the strategy against live market data, risking
+   nothing. Let it run long enough to see trades open and close.
+2. **First live run, deliberately tiny.** Validates the plumbing that dry-run cannot: real
+   keys, real permissions, real order placement, real fees. Use `stake_amount = 15`,
+   `max_open_trades = 1`, one liquid pair (BTC/USDT). Binance's `MIN_NOTIONAL` is 5 USDT,
+   so 15 is comfortably tradable.
+3. **Normal live**, once you have seen a real order fill correctly.
+
+### The Binance API key
+
+Create an **HMAC-SHA256** key (an RSA/Ed25519 key cannot be verified automatically) with:
+
+- **Enable Spot & Margin Trading** — on. The key is rejected without it.
+- **Enable Withdrawals** — **off**. A trading bot never needs it, and the UI warns if set.
+- **IP allowlist** — restrict it to your VPS's public IP.
+
+The key is probed against Binance before being stored: a wrong key is refused immediately
+(422) rather than surfacing later as a container that will not boot. If Binance is
+unreachable the save returns 503 and offers to store it unverified.
+
+### The guard rails
+
+Live settings are bounded by two independent mechanisms:
+
+- The control plane **refuses** unsafe settings: no `"unlimited"` stake, per-trade stake
+  within `CP_LIVE_MIN_STAKE`..`CP_LIVE_MAX_CAPITAL`, and `stake x max_open_trades` never
+  above `CP_LIVE_MAX_CAPITAL` (default 25 USDT). It rejects rather than silently clamping.
+- The generated config sets Freqtrade's own **`available_capital`**, so the bot cannot
+  deploy more than the cap even if the account holds far more.
+
+Raise `CP_LIVE_MAX_CAPITAL` in `backend/.env` when you are ready to trade larger.
+
+> `dry_run_wallet` is ignored in live mode — Binance reports your real balance.
 
 ---
 

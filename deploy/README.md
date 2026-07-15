@@ -145,9 +145,16 @@ docker pull freqtradeorg/freqtrade:stable
 ## Troubleshooting
 
 - **Bot never becomes reachable / `/ping` fails:** check `docker logs cp-bot-<username>`.
-  A common cause is the exchange being unreachable from the VPS (e.g. Binance HTTP 451 in
-  some regions) — Freqtrade's REST API only starts after it loads markets. Switch
-  `CP_DEFAULT_EXCHANGE` to one that works from your location.
+  A common cause is the exchange being unreachable from the VPS — Freqtrade's REST API
+  only starts after it loads markets. Verify from the VPS itself:
+  `curl -o /dev/null -w '%{http_code}' https://api.binance.com/api/v3/ping` (expect `200`).
+  Binance restricts API access by **server country** (freqtrade `docs/exchanges.md` lists
+  Canada, Malaysia, Netherlands, US) and also blocks many datacenter/VPN ranges, returning
+  **HTTP 451**. If your VPS is blocked, no amount of configuration will help — the bots
+  must run from an eligible host.
+- **Saving exchange keys returns 503:** the control plane itself could not reach Binance.
+  It needs outbound egress to `api.binance.com` to verify keys before storing them. The
+  same 451/geo rules apply. `?force=true` stores the key unverified as an escape hatch.
 - **`fiat_display_currency`** is disabled by default because it makes a blocking CoinGecko
   call at startup; re-enable it in `backend/app/services/config_builder.py` only if
   CoinGecko is reachable from the VPS.
