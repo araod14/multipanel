@@ -2,8 +2,9 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
+from app.config import get_settings
 from app.models.bot_instance import BotStatus
 
 
@@ -21,3 +22,6 @@ class BotInstanceOut(BaseModel):
     stake_currency: str
     created_at: datetime
     last_seen_at: datetime | None
+    # Not stored on the instance: filled from settings so the UI can state the ceiling it
+    # is about to enable. ``default_factory`` runs per response, so it tracks the config.
+    live_max_capital: float = Field(default_factory=lambda: get_settings().live_max_capital)

@@ -33,12 +33,28 @@ class Settings(BaseSettings):
     freqtrade_image: str = "freqtradeorg/freqtrade:stable"
     bot_network: str = "control-plane-bots"
     bot_data_root: str = "/srv/control-plane/bots"
-    # Default exchange used when a user has no exchange credential yet (dry-run).
+    # Fallback exchange for a user who has no exchange credential yet, i.e. dry-run only.
+    # Deliberately NOT restricted to ``SUPPORTED_EXCHANGES``: that allowlist guards the
+    # real-money path (stored credentials), while this only picks which public market data
+    # a paper bot reads, so local smoke tests can point it at a reachable exchange.
     default_exchange: str = "binance"
     # How the control plane addresses bot containers:
     #   "dns"       -> http://<container_name>:8080 (control plane runs on the bot network)
     #   "docker_ip" -> resolve the container IP via the Docker SDK (host-side dev)
     bot_address_mode: str = "dns"
+
+    # --- Live (real-money) trading guard rails ---
+    # Hard ceiling on the TOTAL stake a live bot may deploy, in stake currency.
+    # Emitted into the bot config as ``available_capital``, so Freqtrade enforces it
+    # independently of the control plane's own validation.
+    live_max_capital: float = 25.0
+    # Floor for a live per-trade stake. Binance's MIN_NOTIONAL is 5 USDT, but Freqtrade
+    # inflates the effective minimum with ``amount_reserve_percent`` and the stoploss;
+    # a stake under a pair's minimum makes Freqtrade skip every trade *silently*.
+    live_min_stake: float = 10.0
+    # Probe exchange API keys against the exchange before storing them. Disabled by the
+    # smoke tests, which store deliberately fake keys.
+    validate_exchange_keys: bool = True
 
     # --- Bootstrap admin ---
     bootstrap_admin_email: str = ""

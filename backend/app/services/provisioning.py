@@ -37,6 +37,10 @@ class LiveModeWithoutKeys(RuntimeError):
     """Raised when enabling live trading for a user that has no exchange credentials."""
 
 
+class LiveConfigRejected(RuntimeError):
+    """Raised when a bot's stored settings are not safe to run with real money."""
+
+
 def _container_name(username: str) -> str:
     return f"cp-bot-{username}"
 
@@ -67,8 +71,17 @@ def provision_bot(
 
     existing = user.bot
     desired_dry_run = dry_run if dry_run is not None else (existing.dry_run if existing else True)
-    if not desired_dry_run and user.exchange_credential is None:
-        raise LiveModeWithoutKeys("cannot run live (dry_run=false) without exchange credentials")
+    if not desired_dry_run:
+        # Single choke point: every live launch passes through here, whatever triggered it
+        # (mode switch, config edit, credential rotation, re-provision). Both checks run
+        # before anything is written to disk or handed to Docker.
+        if user.exchange_credential is None:
+            raise LiveModeWithoutKeys("cannot run live (dry_run=false) without exchange credentials")
+        stored = bot_config.effective(existing.user_config_json if existing else None)
+        try:
+            bot_config.validate(stored, dry_run=False)
+        except bot_config.ConfigValidationError as exc:
+            raise LiveConfigRejected(f"settings are not safe for live trading: {exc}") from exc
 
     creds = generate_instance_credentials(user.username)
     name = _container_name(user.username)

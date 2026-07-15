@@ -41,6 +41,10 @@ _BASE_CONFIG: dict[str, Any] = {
         "ccxt_config": {},
         "ccxt_async_config": {},
         "pair_whitelist": ["BTC/USDT", "ETH/USDT"],
+        # BNB is blacklisted on Freqtrade's own recommendation for Binance (docs/
+        # exchanges.md "Binance Blacklist recommendation"): the account pays fees in BNB,
+        # so a trade holding BNB can become unsellable once fees eat into the position.
+        # ``bot_config.COMMON_BASE_COINS`` omits BNB to match.
         "pair_blacklist": ["BNB/.*"],
     },
     "pairlists": [{"method": "StaticPairList"}],
@@ -73,6 +77,16 @@ def build_bot_config(
     config["dry_run"] = dry_run
     config["dry_run_wallet"] = user_config["dry_run_wallet"]
     config["exchange"]["name"] = exchange_name
+
+    # Real money: bound the total capital the bot may ever deploy. Freqtrade computes
+    # available capital as ``available_capital + closed profit`` and ignores the real
+    # wallet balance entirely (freqtrade/wallets.py get_total_stake_amount), so this holds
+    # even if the exchange account is funded with far more. This is a second, independent
+    # guard: ``bot_config.validate`` already refused unsafe live settings upstream.
+    # Note it supersedes ``tradable_balance_ratio`` above, which stays for the dry-run path
+    # (see freqtrade docs/configuration.md "Incompatible with tradable_balance_ratio").
+    if not dry_run:
+        config["available_capital"] = settings.live_max_capital
 
     # Apply the user-editable, schema-safe fields. The quote currency is fixed to USDT.
     config["stake_currency"] = bot_config.STAKE_CURRENCY

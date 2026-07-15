@@ -4,13 +4,14 @@ import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import FileResponse
+from starlette.responses import FileResponse, JSONResponse
 
 from app.bootstrap import bootstrap_admin, init_database
 from app.routers import admin, auth, user
+from app.services.provisioning import LiveConfigRejected, LiveModeWithoutKeys
 
 logging.basicConfig(level=logging.INFO)
 
@@ -38,6 +39,17 @@ app = FastAPI(
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
+
+
+@app.exception_handler(LiveModeWithoutKeys)
+@app.exception_handler(LiveConfigRejected)
+def _live_gate_handler(_request: Request, exc: Exception) -> JSONResponse:
+    """Turn a refused live launch into a 409 wherever it is raised.
+
+    ``provision_bot`` is reachable from five routes; handling this centrally keeps every
+    one of them from leaking the refusal as an unhandled 500.
+    """
+    return JSONResponse(status_code=409, content={"detail": str(exc)})
 
 
 @app.get("/api/health", tags=["meta"])

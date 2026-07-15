@@ -1,7 +1,7 @@
 """End-to-end check: act as a user who picks a strategy and runs the bot dry.
 
 Mirrors the exact path the user endpoint (PUT /me/bot/config) takes:
-    bot_config.validate(...)  ->  provisioning.provision_bot(..., dry_run=True)
+    bot_config.validate(..., dry_run=...)  ->  provisioning.provision_bot(..., dry_run=True)
 
 Then talks to the bot's own REST API to prove the chosen strategy is loaded and
 dry-run is active. Run from backend/ with kraken (Binance is geo-blocked here):
@@ -64,7 +64,7 @@ def main() -> int:
         print(f"[2/6] Applying user settings (strategy={CHOSEN_STRATEGY}) ...")
         current = bot_config.effective(instance.user_config_json)
         merged = {**current, "strategy": CHOSEN_STRATEGY}
-        instance.user_config_json = bot_config.validate(merged)
+        instance.user_config_json = bot_config.validate(merged, dry_run=instance.dry_run)
         provisioning.provision_bot(db, user, runtime=runtime)  # re-provision, keeps dry_run
         db.commit()
         db.refresh(instance)

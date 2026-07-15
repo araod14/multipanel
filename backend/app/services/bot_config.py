@@ -7,6 +7,7 @@ JSON blob on the BotInstance, and applied by ``config_builder`` + ``provisioning
 
 from typing import Any
 
+from app.config import get_settings
 from app.services import strategy_assets
 
 ALLOWED_TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d"]
@@ -63,9 +64,12 @@ def effective(instance_config: dict | None) -> dict[str, Any]:
     return merged
 
 
-def validate(payload: dict[str, Any]) -> dict[str, Any]:
+def validate(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     """Validate and normalise a user-supplied settings dict.
 
+    :param dry_run: trading mode the settings are destined for. Live mode applies the
+        extra money guard rails in :func:`_validate_live_limits`. Deliberately a required
+        keyword: defaulting it would fail *open* towards the permissive branch.
     :raises ConfigValidationError: on any invalid field.
     """
     cfg = effective(None)
@@ -113,7 +117,45 @@ def validate(payload: dict[str, Any]) -> dict[str, Any]:
         raise ConfigValidationError("dry_run_wallet must be a positive number")
     cfg["dry_run_wallet"] = float(cfg["dry_run_wallet"])
 
+    if not dry_run:
+        _validate_live_limits(cfg)
+
     return cfg
+
+
+def _validate_live_limits(cfg: dict[str, Any]) -> None:
+    """Apply the real-money guard rails. Only called when ``dry_run`` is false.
+
+    Rejects rather than clamps: silently rewriting the amount someone chose to trade with
+    is worse than refusing, because they would never learn their intent was overridden.
+
+    :raises ConfigValidationError: when the settings would risk more than allowed.
+    """
+    settings = get_settings()
+    max_capital = settings.live_max_capital
+    min_stake = settings.live_min_stake
+
+    stake = cfg["stake_amount"]
+    if stake == "unlimited":
+        raise ConfigValidationError(
+            "live trading requires an explicit stake_amount: 'unlimited' would let the bot "
+            f"deploy the whole wallet. Set a number between {min_stake} and {max_capital} "
+            f"{STAKE_CURRENCY}."
+        )
+
+    if stake < min_stake:
+        raise ConfigValidationError(
+            f"live stake_amount must be at least {min_stake} {STAKE_CURRENCY} (got {stake}). "
+            "Below the exchange's minimum order size the bot silently never opens a trade."
+        )
+
+    exposure = stake * cfg["max_open_trades"]
+    if exposure > max_capital:
+        raise ConfigValidationError(
+            f"live exposure would be {exposure:g} {STAKE_CURRENCY} "
+            f"({stake:g} stake x {cfg['max_open_trades']} max open trades), over the "
+            f"{max_capital:g} {STAKE_CURRENCY} limit. Lower the stake or max open trades."
+        )
 
 
 def _validate_roi_table(table: Any) -> list[dict[str, Any]]:

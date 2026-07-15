@@ -41,6 +41,11 @@ class BotConfigOut(BaseModel):
     available_timeframes: list[str]
     available_pairlist_modes: list[str]
     available_base_coins: list[str]
+    # Trading mode and the live guard rails, so the UI can warn about real money and
+    # show the limits the server will enforce. Derived, never stored on the config blob.
+    dry_run: bool
+    live_max_capital: float
+    live_min_stake: float
 
 
 class BotConfigIn(BaseModel):

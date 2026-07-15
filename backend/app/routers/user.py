@@ -7,6 +7,7 @@ Freqtrade REST API is forwarded.
 
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
+from app.config import get_settings
 from app.models.bot_instance import BotInstance
 from app.schemas.bot_config import BotConfigIn, BotConfigOut, StrategyOption
 from app.schemas.bots import BotInstanceOut
@@ -73,10 +74,14 @@ def my_bot(user: CurrentUser) -> BotInstance:
 
 
 def _config_out(instance: BotInstance) -> BotConfigOut:
+    settings = get_settings()
     cfg = bot_config.effective(instance.user_config_json)
     return BotConfigOut(
         **cfg,
         stake_currency=bot_config.STAKE_CURRENCY,
+        dry_run=instance.dry_run,
+        live_max_capital=settings.live_max_capital,
+        live_min_stake=settings.live_min_stake,
         available_strategies=[
             StrategyOption(key=s.key, label=s.label, description=s.description)
             for s in strategy_assets.STRATEGIES.values()
@@ -104,7 +109,7 @@ def update_config(body: BotConfigIn, user: CurrentUser, db: DbSession) -> BotCon
     current = bot_config.effective(instance.user_config_json)
     merged = {**current, **body.to_payload()}
     try:
-        validated = bot_config.validate(merged)
+        validated = bot_config.validate(merged, dry_run=instance.dry_run)
     except ConfigValidationError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
