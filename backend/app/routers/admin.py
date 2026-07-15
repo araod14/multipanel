@@ -6,15 +6,25 @@ records and audit trail. Creating a user does not yet launch a container.
 
 from fastapi import APIRouter, HTTPException, status
 
+from app.config import get_settings
 from app.models.bot_instance import BotInstance
 from app.models.user import User
 from app.schemas.bots import BotInstanceOut
-from app.schemas.exchange import BotModeIn, ExchangeCredentialIn, ExchangeCredentialOut
+from app.schemas.exchange import (
+    BotModeIn,
+    ExchangeCredentialIn,
+    ExchangeCredentialOut,
+    ExchangeOptionsOut,
+)
 from app.schemas.users import UserCreate, UserOut
 from app.security.deps import CurrentAdmin, DbSession
 from app.security.passwords import hash_password
-from app.services import audit, exchange_creds, provisioning
-from app.services.provisioning import LiveModeWithoutKeys
+from app.services import audit, exchange_creds, exchange_probe, provisioning
+from app.services.exchange_probe import (
+    ExchangeProbeUnavailable,
+    InvalidExchangeCredentials,
+    ProbeResult,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -142,10 +152,9 @@ def set_mode(user_id: int, body: BotModeIn, admin: CurrentAdmin, db: DbSession) 
     user = _require_user(db, user_id)
     if user.bot is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="bot not provisioned")
-    try:
-        instance = provisioning.provision_bot(db, user, dry_run=body.dry_run)
-    except LiveModeWithoutKeys as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    # A refused live launch (no keys / unsafe settings) becomes a 409 via the app-level
+    # handlers in main.py, so every route that provisions behaves the same way.
+    instance = provisioning.provision_bot(db, user, dry_run=body.dry_run)
     audit.record(
         db,
         actor=f"admin:{admin.id}",
@@ -176,28 +185,84 @@ def rotate_credentials(user_id: int, admin: CurrentAdmin, db: DbSession) -> BotI
 # --- Exchange credentials (encrypted at rest) ---
 
 
+@router.get("/exchanges", response_model=ExchangeOptionsOut)
+def list_exchanges(admin: CurrentAdmin) -> ExchangeOptionsOut:
+    """Return the exchanges credentials may be stored for, and the dry-run default.
+
+    Exists so the admin UI never hardcodes an exchange id and drifts from the backend.
+    """
+    return ExchangeOptionsOut(
+        supported=list(exchange_creds.SUPPORTED_EXCHANGES),
+        default=get_settings().default_exchange,
+    )
+
+
+def _probe_credentials(body: ExchangeCredentialIn, *, force: bool) -> ProbeResult | None:
+    """Verify credentials before they are stored, honouring the override rules.
+
+    A rejection by the exchange is final; an *unreachable* exchange is not, since that
+    says nothing about the key. Only the latter may be forced past.
+    """
+    if not get_settings().validate_exchange_keys:
+        return None
+    try:
+        return exchange_probe.probe(body.exchange_name.value, body.key, body.secret)
+    except InvalidExchangeCredentials as exc:
+        # Never overridable: the exchange authoritatively said no.
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except ExchangeProbeUnavailable as exc:
+        if force:
+            return None
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"{exc} Retry, or resend with force=true to store it unverified.",
+        ) from exc
+
+
 @router.put("/users/{user_id}/exchange", response_model=ExchangeCredentialOut)
 def set_exchange(
-    user_id: int, body: ExchangeCredentialIn, admin: CurrentAdmin, db: DbSession
+    user_id: int,
+    body: ExchangeCredentialIn,
+    admin: CurrentAdmin,
+    db: DbSession,
+    force: bool = False,
 ) -> dict:
-    """Set/replace a user's exchange API credentials.
+    """Set/replace a user's exchange API credentials, verifying them first.
+
+    The keys are probed against the exchange before anything is written, so a bad key is
+    refused here rather than surfacing later as a container that will not boot.
 
     If the user already has a running bot, it is re-provisioned so the new keys are
     injected. The secrets themselves are never returned or logged.
+
+    :param force: store the credentials even if the exchange could not be reached. Has no
+        effect when the exchange actively rejected them.
     """
     user = _require_user(db, user_id)
+    result = _probe_credentials(body, force=force)
+
     cred = exchange_creds.set_credentials(db, user, body)
     if user.bot is not None:
         provisioning.provision_bot(db, user)
+
+    verified = result is not None
     audit.record(
         db,
         actor=f"admin:{admin.id}",
-        action="exchange.set",
+        action="exchange.set" if verified else "exchange.set_unverified",
         target_user_id=user_id,
-        detail=f"exchange={body.exchange_name}",
+        detail=f"exchange={body.exchange_name.value}",
     )
     db.commit()
-    return exchange_creds.metadata(cred)
+
+    meta = exchange_creds.metadata(cred)
+    meta["verified"] = verified
+    if result is not None:
+        meta["can_withdraw"] = result.can_withdraw
+        meta["balance"] = result.balance
+    return meta
 
 
 @router.get("/users/{user_id}/exchange", response_model=ExchangeCredentialOut)

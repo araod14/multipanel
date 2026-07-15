@@ -9,14 +9,18 @@ from sqlalchemy.orm import Session
 
 from app.models.exchange_credential import ExchangeCredential
 from app.models.user import User
-from app.schemas.exchange import ExchangeCredentialIn
+from app.schemas.exchange import ExchangeCredentialIn, ExchangeName
 from app.security import vault
+
+#: Exchanges real credentials may be stored for. Guards the real-money path only; the
+#: dry-run fallback (``CP_DEFAULT_EXCHANGE``) is deliberately unconstrained.
+SUPPORTED_EXCHANGES: tuple[str, ...] = tuple(e.value for e in ExchangeName)
 
 
 def set_credentials(db: Session, user: User, payload: ExchangeCredentialIn) -> ExchangeCredential:
     """Create or replace ``user``'s exchange credentials (encrypted at rest)."""
     cred = user.exchange_credential or ExchangeCredential(user_id=user.id)
-    cred.exchange_name = payload.exchange_name
+    cred.exchange_name = payload.exchange_name.value
     cred.key_enc = vault.encrypt(payload.key)
     cred.secret_enc = vault.encrypt(payload.secret)
     cred.password_enc = vault.encrypt(payload.password) if payload.password else None
