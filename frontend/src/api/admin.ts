@@ -3,6 +3,7 @@ import type {
   BotInstance,
   ExchangeCredentialInput,
   ExchangeCredentialMeta,
+  ExchangeOptions,
   User,
 } from "./types";
 
@@ -40,14 +41,22 @@ export const adminApi = {
   async rotateCredentials(userId: number): Promise<BotInstance> {
     return (await api.post(`/admin/users/${userId}/bot/rotate-credentials`)).data;
   },
+  async listExchanges(): Promise<ExchangeOptions> {
+    return (await api.get("/admin/exchanges")).data;
+  },
   async getExchange(userId: number): Promise<ExchangeCredentialMeta> {
     return (await api.get(`/admin/users/${userId}/exchange`)).data;
   },
+  /**
+   * Store credentials. The backend probes them against the exchange first: a rejection is
+   * a 422, an unreachable exchange a 503 that `force` may override.
+   */
   async setExchange(
     userId: number,
     input: ExchangeCredentialInput,
+    force = false,
   ): Promise<ExchangeCredentialMeta> {
-    return (await api.put(`/admin/users/${userId}/exchange`, input)).data;
+    return (await api.put(`/admin/users/${userId}/exchange`, input, { params: { force } })).data;
   },
   async deleteExchange(userId: number): Promise<void> {
     await api.delete(`/admin/users/${userId}/exchange`);

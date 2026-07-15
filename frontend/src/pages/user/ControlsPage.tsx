@@ -2,10 +2,15 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { userApi } from "../../api/user";
+import { ModeBadge } from "../../components/StatusBadge";
 
 export function ControlsPage() {
   const qc = useQueryClient();
   const [pair, setPair] = useState("");
+
+  // Same query key refreshBot already invalidates, so the badge stays consistent.
+  const bot = useQuery({ queryKey: ["me-bot"], queryFn: userApi.myBot, retry: false });
+  const isLive = bot.data?.dry_run === false;
 
   const refreshBot = () => qc.invalidateQueries({ queryKey: ["me-bot"] });
   const start = useMutation({ mutationFn: () => userApi.start(), onSuccess: refreshBot });
@@ -29,8 +34,31 @@ export function ControlsPage() {
     ? logs.data.logs.map((l: any[]) => `${l[0]} ${l[2]} ${l[4]}`).join("\n")
     : "";
 
+  // Force entry bypasses the strategy and buys immediately. In live that is real money
+  // leaving the account on one click, so make the user say it out loud.
+  const confirmForceEnter = () => {
+    if (
+      isLive &&
+      !confirm(
+        `Force a REAL buy of ${pair} with real money?\n\n` +
+          `This skips the strategy and places the order immediately.`,
+      )
+    )
+      return;
+    forceEnter.mutate();
+  };
+
   return (
     <>
+      {isLive && (
+        <div className="card">
+          <div className="row">
+            <ModeBadge dryRun={false} />
+            <span>This bot is trading with real money on the exchange.</span>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <h2>Trading loop</h2>
         <div className="row">
@@ -51,7 +79,11 @@ export function ControlsPage() {
             <input value={pair} onChange={(e) => setPair(e.target.value)} />
           </div>
           <div style={{ alignSelf: "flex-end" }}>
-            <button onClick={() => forceEnter.mutate()} disabled={!pair || forceEnter.isPending}>
+            <button
+              className={isLive ? "danger" : undefined}
+              onClick={confirmForceEnter}
+              disabled={!pair || forceEnter.isPending}
+            >
               Force enter
             </button>
           </div>

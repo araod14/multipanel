@@ -4,6 +4,7 @@ import { AxiosError } from "axios";
 
 import { userApi } from "../../api/user";
 import type { BotConfig, BotConfigInput, PairlistMode, RoiStep } from "../../api/types";
+import { ModeBadge } from "../../components/StatusBadge";
 
 export function SettingsPage() {
   const qc = useQueryClient();
@@ -109,12 +110,41 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
     },
   });
 
+  const isLive = !data.dry_run;
+  // Mirrors the server rule (stake x max open trades <= live_max_capital) so you learn you
+  // are over the limit while typing, not after a round-trip. The server stays authoritative.
+  const exposure =
+    stakeAmount === "unlimited" ? null : Number(stakeAmount) * Number(maxOpen) || 0;
+  const overCap = isLive && exposure !== null && exposure > data.live_max_capital;
+
+  const onSave = () => {
+    if (
+      isLive &&
+      !confirm(
+        `Save and restart the bot with REAL money?\n\n` +
+          `Exposure: ${exposure ?? "?"} ${data.stake_currency} ` +
+          `(${stakeAmount} x ${maxOpen} trades), limit ${data.live_max_capital}.\n` +
+          `Pairs: ${pairlistMode === "static" ? pairs.join(", ") : `top ${volumeN} by volume`}.`,
+      )
+    )
+      return;
+    save.mutate();
+  };
+
   return (
     <div className="card" style={{ maxWidth: 640 }}>
       <h2>Bot settings</h2>
+      {isLive && (
+        <div className="row" style={{ marginBottom: 8 }}>
+          <ModeBadge dryRun={false} />
+          <span>
+            This bot trades REAL money. Saving restarts it immediately. Total exposure is
+            capped at {data.live_max_capital} {data.stake_currency}.
+          </span>
+        </div>
+      )}
       <p className="muted">
-        Saving applies your settings and restarts the bot. Live trading uses these too —
-        review carefully. All pairs are quoted in USDT.
+        Saving applies your settings and restarts the bot. All pairs are quoted in USDT.
       </p>
 
       <label>Strategy</label>
@@ -195,7 +225,11 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
           <input value="USDT" disabled />
         </div>
         <div style={{ flex: 1 }}>
-          <label>Stake amount ("unlimited" or number)</label>
+          <label>
+            {isLive
+              ? `Stake amount (${data.live_min_stake}–${data.live_max_capital} per trade)`
+              : 'Stake amount ("unlimited" or number)'}
+          </label>
           <input value={stakeAmount} onChange={(e) => setStakeAmount(e.target.value)} />
         </div>
         <div style={{ flex: 1 }}>
@@ -233,9 +267,17 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
             min={0}
             value={dryRunWallet}
             onChange={(e) => setDryRunWallet(e.target.value)}
+            disabled={isLive}
           />
+          {isLive && <p className="muted">Ignored in live — the exchange reports your real balance.</p>}
         </div>
       </div>
+      {isLive && exposure !== null && (
+        <p className={overCap ? "error" : "muted"}>
+          Total exposure: {exposure} {data.stake_currency} ({stakeAmount} x {maxOpen} trades) —
+          limit {data.live_max_capital}.
+        </p>
+      )}
 
       <label style={{ marginTop: 12 }}>Take-profit ROI table</label>
       <p className="muted">
@@ -310,7 +352,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
       )}
 
       <div style={{ marginTop: 16 }}>
-        <button onClick={() => save.mutate()} disabled={save.isPending}>
+        <button className={isLive ? "danger" : undefined} onClick={onSave} disabled={save.isPending}>
           {save.isPending ? "Saving & restarting…" : "Save settings"}
         </button>
       </div>

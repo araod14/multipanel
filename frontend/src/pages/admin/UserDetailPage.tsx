@@ -49,6 +49,18 @@ export function UserDetailPage() {
   const busy =
     provision.isPending || start.isPending || stop.isPending || rotate.isPending || setMode.isPending;
 
+  const goLive = () => {
+    const exchangeName = exchange.data?.exchange_name ?? "the exchange";
+    const cap = bot.data?.live_max_capital;
+    const message =
+      `Enable LIVE trading with REAL money?\n\n` +
+      `The bot will be recreated and will place real orders on ${exchangeName}.\n` +
+      `Total exposure is capped at ${cap} ${bot.data?.stake_currency}; the server refuses ` +
+      `settings that would risk more.\n\n` +
+      `This cannot be undone for orders already filled.`;
+    if (confirm(message)) setMode.mutate(false);
+  };
+
   return (
     <>
       <button className="secondary" onClick={() => navigate("/admin")} style={{ marginBottom: 16 }}>
@@ -80,13 +92,7 @@ export function UserDetailPage() {
             </div>
             <div className="row" style={{ marginTop: 14 }}>
               {bot.data.dry_run ? (
-                <button
-                  className="danger"
-                  onClick={() => {
-                    if (confirm("Enable LIVE trading with real funds?")) setMode.mutate(false);
-                  }}
-                  disabled={busy}
-                >
+                <button className="danger" onClick={goLive} disabled={busy}>
                   Go LIVE
                 </button>
               ) : (
@@ -128,22 +134,44 @@ function ExchangeCard({
   onChanged: () => void;
   loading: boolean;
 }) {
-  const [exchangeName, setExchangeName] = useState("binance");
+  // Fetched rather than hardcoded: a literal here would silently drift from the
+  // backend allowlist and 422 on every save.
+  const exchanges = useQuery({ queryKey: ["exchanges"], queryFn: adminApi.listExchanges });
+  const [exchangeName, setExchangeName] = useState("");
   const [key, setKey] = useState("");
   const [secret, setSecret] = useState("");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [probed, setProbed] = useState<ExchangeCredentialMeta | null>(null);
+
+  const selected = exchangeName || exchanges.data?.supported[0] || "";
 
   const save = useMutation({
-    mutationFn: () =>
-      adminApi.setExchange(userId, { exchange_name: exchangeName, key, secret }),
-    onSuccess: () => {
+    mutationFn: (force: boolean) =>
+      adminApi.setExchange(userId, { exchange_name: selected, key, secret }, force),
+    onSuccess: (result) => {
+      setSaveError(null);
+      setProbed(result);
       setKey("");
       setSecret("");
       onChanged();
     },
+    onError: (e: AxiosError<{ detail: string }>) => {
+      const detail = e.response?.data?.detail ?? "Could not save credentials";
+      // 503 means we could not reach the exchange, which says nothing about the key —
+      // offer to store it unverified. A 422 is the exchange itself saying no: never offer.
+      if (e.response?.status === 503 && confirm(`${detail}\n\nStore it without verifying?`)) {
+        save.mutate(true);
+        return;
+      }
+      setSaveError(detail);
+    },
   });
   const remove = useMutation({
     mutationFn: () => adminApi.deleteExchange(userId),
-    onSuccess: onChanged,
+    onSuccess: () => {
+      setProbed(null);
+      onChanged();
+    },
   });
 
   return (
@@ -160,10 +188,32 @@ function ExchangeCard({
         <p className="muted">No credentials set. The bot can only run in dry-run.</p>
       )}
 
+      {probed && (
+        <>
+          <p className="muted">
+            {probed.verified
+              ? `Verified — ${probed.balance ?? 0} USDT available on the exchange.`
+              : "Stored without verification."}
+          </p>
+          {probed.can_withdraw && (
+            <div className="error">
+              This API key has withdrawals enabled. A trading bot never needs that — consider
+              re-creating it with Spot Trading only.
+            </div>
+          )}
+        </>
+      )}
+
       <div className="row">
         <div style={{ width: 160 }}>
           <label>Exchange</label>
-          <input value={exchangeName} onChange={(e) => setExchangeName(e.target.value)} />
+          <select value={selected} onChange={(e) => setExchangeName(e.target.value)}>
+            {(exchanges.data?.supported ?? []).map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
         </div>
         <div style={{ flex: 1 }}>
           <label>API key</label>
@@ -174,17 +224,31 @@ function ExchangeCard({
           <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} />
         </div>
         <div style={{ alignSelf: "flex-end" }}>
-          <button onClick={() => save.mutate()} disabled={!key || !secret || save.isPending}>
-            Save & inject
+          <button
+            onClick={() => save.mutate(false)}
+            disabled={!key || !secret || !selected || save.isPending}
+          >
+            {save.isPending ? "Verifying…" : "Save & inject"}
           </button>
         </div>
       </div>
+      <p className="muted">
+        Use an HMAC-SHA256 key with Spot Trading enabled and withdrawals disabled. The key is
+        verified against the exchange before it is stored.
+      </p>
+      {saveError && <div className="error">{saveError}</div>}
       {meta && (
         <button
           className="danger"
           style={{ marginTop: 12 }}
           onClick={() => {
-            if (confirm("Delete exchange credentials?")) remove.mutate();
+            if (
+              confirm(
+                "Delete exchange credentials?\n\nThe bot will be forced back to dry-run and " +
+                  "restarted immediately. Any open live positions are left on the exchange.",
+              )
+            )
+              remove.mutate();
           }}
         >
           Delete credentials

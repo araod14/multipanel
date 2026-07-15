@@ -21,6 +21,8 @@ export interface BotInstance {
   stake_currency: string;
   created_at: string;
   last_seen_at: string | null;
+  // Server-enforced ceiling on total live exposure, so the UI can state it before enabling.
+  live_max_capital: number;
 }
 
 export interface ExchangeCredentialMeta {
@@ -29,6 +31,16 @@ export interface ExchangeCredentialMeta {
   has_password: boolean;
   has_uid: boolean;
   updated_at: string;
+  // Set only in the response to saving credentials, when the probe ran.
+  verified?: boolean | null;
+  can_withdraw?: boolean | null;
+  balance?: number | null;
+}
+
+/** GET /admin/exchanges — which exchanges credentials may be stored for. */
+export interface ExchangeOptions {
+  supported: string[];
+  default: string;
 }
 
 export interface ExchangeCredentialInput {
@@ -71,6 +83,10 @@ export interface BotConfig {
   available_timeframes: string[];
   available_pairlist_modes: PairlistMode[];
   available_base_coins: string[];
+  // Trading mode + the live limits the server enforces (see backend services/bot_config).
+  dry_run: boolean;
+  live_max_capital: number;
+  live_min_stake: number;
 }
 
 export type BotConfigInput = Partial<
