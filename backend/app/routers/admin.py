@@ -276,9 +276,19 @@ def get_exchange(user_id: int, admin: CurrentAdmin, db: DbSession) -> dict:
 
 @router.delete("/users/{user_id}/exchange", status_code=status.HTTP_204_NO_CONTENT)
 def delete_exchange(user_id: int, admin: CurrentAdmin, db: DbSession) -> None:
-    """Delete a user's exchange credentials (forces dry-run on next provision)."""
+    """Delete a user's exchange credentials, forcing their bot back to dry-run.
+
+    Deleting the keys is an explicit "cut it off" action, so the bot is recreated in
+    dry-run with an empty exchange key rather than left running on the deleted keys.
+    A live bot with open positions **is** stopped and restarted by this.
+
+    ``dry_run=True`` is passed explicitly: the bot now has no credentials, so letting the
+    mode default to the stored one would refuse to provision and wedge the user.
+    """
     user = _require_user(db, user_id)
     if not exchange_creds.delete_credentials(db, user):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no exchange credentials")
+    if user.bot is not None:
+        provisioning.provision_bot(db, user, dry_run=True)
     audit.record(db, actor=f"admin:{admin.id}", action="exchange.delete", target_user_id=user_id)
     db.commit()
