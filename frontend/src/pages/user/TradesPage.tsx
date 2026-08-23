@@ -30,7 +30,7 @@ export function TradesPage() {
       ) : rows.length === 0 ? (
         <p className="muted">No open trades.</p>
       ) : (
-        <table>
+        <table className="responsive-table">
           <thead>
             <tr>
               <th>ID</th>
@@ -44,14 +44,14 @@ export function TradesPage() {
           <tbody>
             {rows.map((t) => (
               <tr key={t.trade_id}>
-                <td>{t.trade_id}</td>
-                <td>{t.pair}</td>
-                <td>{t.amount}</td>
-                <td>{t.open_rate}</td>
-                <td>
+                <td data-label="ID">{t.trade_id}</td>
+                <td data-label="Par" className="table-primary">{t.pair}</td>
+                <td data-label="Cantidad">{t.amount}</td>
+                <td data-label="Entrada">{t.open_rate}</td>
+                <td data-label="Profit">
                   <ProfitCell pct={typeof t.profit_ratio === "number" ? t.profit_ratio * 100 : null} />
                 </td>
-                <td style={{ textAlign: "right" }}>
+                <td data-label="Acción" className="table-actions">
                   <button
                     className="danger"
                     onClick={() => forceExit.mutate(String(t.trade_id))}

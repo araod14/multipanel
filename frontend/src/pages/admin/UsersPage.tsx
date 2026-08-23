@@ -38,16 +38,16 @@ export function UsersPage() {
     <>
       <div className="card">
         <h2>Create user</h2>
-        <div className="row">
-          <div style={{ flex: 1 }}>
+        <div className="form-grid create-user-form">
+          <div className="field">
             <label>Username</label>
             <input value={username} onChange={(e) => setUsername(e.target.value)} />
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="field">
             <label>Email</label>
             <input value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="field">
             <label>Password</label>
             <input
               type="password"
@@ -55,7 +55,7 @@ export function UsersPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <div style={{ alignSelf: "flex-end" }}>
+          <div className="field-action mt-12">
             <button
               onClick={() => createUser.mutate()}
               disabled={!username || !email || password.length < 8 || createUser.isPending}
@@ -72,7 +72,7 @@ export function UsersPage() {
         {isLoading ? (
           <p className="muted">Loading…</p>
         ) : (
-          <table>
+          <table className="responsive-table">
             <thead>
               <tr>
                 <th>ID</th>
@@ -85,23 +85,25 @@ export function UsersPage() {
             <tbody>
               {users?.map((u) => (
                 <tr key={u.id}>
-                  <td>{u.id}</td>
-                  <td>{u.username}</td>
-                  <td>{u.email}</td>
-                  <td>{u.status}</td>
-                  <td className="row" style={{ justifyContent: "flex-end" }}>
-                    <button className="secondary" onClick={() => navigate(`/admin/users/${u.id}`)}>
-                      Manage
-                    </button>
-                    <button
-                      className="danger"
-                      onClick={() => {
-                        if (confirm(`Delete user ${u.username} and its bot?`))
-                          deleteUser.mutate(u.id);
-                      }}
-                    >
-                      Delete
-                    </button>
+                  <td data-label="ID">{u.id}</td>
+                  <td data-label="Usuario" className="table-primary">{u.username}</td>
+                  <td data-label="Email">{u.email}</td>
+                  <td data-label="Estado">{u.status}</td>
+                  <td data-label="Acciones" className="table-actions">
+                    <div className="row">
+                      <button className="secondary" onClick={() => navigate(`/admin/users/${u.id}`)}>
+                        Manage
+                      </button>
+                      <button
+                        className="danger"
+                        onClick={() => {
+                          if (confirm(`Delete user ${u.username} and its bot?`))
+                            deleteUser.mutate(u.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

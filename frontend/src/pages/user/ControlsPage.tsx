@@ -73,14 +73,13 @@ export function ControlsPage() {
 
       <div className="card">
         <h2>Force entry</h2>
-        <div className="row">
-          <div style={{ flex: 1 }}>
+        <div className="row mobile-stack">
+          <div className="field grow">
             <label>Pair (e.g. BTC/USDT)</label>
             <input value={pair} onChange={(e) => setPair(e.target.value)} />
           </div>
-          <div style={{ alignSelf: "flex-end" }}>
-            <button
-              className={isLive ? "danger" : undefined}
+          <div className="field-action">
+            <button className={`mobile-full-button${isLive ? " danger" : ""}`}
               onClick={confirmForceEnter}
               disabled={!pair || forceEnter.isPending}
             >

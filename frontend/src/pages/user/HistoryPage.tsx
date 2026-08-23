@@ -20,8 +20,8 @@ export function HistoryPage() {
 
   return (
     <div className="card">
-      <div className="row" style={{ justifyContent: "space-between" }}>
-        <h2 style={{ margin: 0 }}>Historial de trades</h2>
+      <div className="row space-between">
+        <h2 className="mb-8">Historial de trades</h2>
         {!history.isError && trades.length > 0 && (
           <span className="muted">
             {total} cerrados · <span style={{ color: "var(--green)" }}>{wins} ganados</span> ·{" "}
@@ -37,7 +37,7 @@ export function HistoryPage() {
       ) : trades.length === 0 ? (
         <p className="muted">Aún no hay trades cerrados.</p>
       ) : (
-        <table>
+        <table className="responsive-table">
           <thead>
             <tr>
               <th>Par</th>
@@ -56,22 +56,22 @@ export function HistoryPage() {
               const cls = abs > 0 ? "win" : abs < 0 ? "loss" : "";
               return (
                 <tr key={t.trade_id} className={cls}>
-                  <td>{t.pair}</td>
-                  <td>
+                  <td data-label="Par" className="table-primary">{t.pair}</td>
+                  <td data-label="Lado">
                     <span className={`badge ${t.is_short ? "live" : "dry"}`}>
                       {t.is_short ? "short" : "long"}
                     </span>
                   </td>
-                  <td className="num">{price(t.open_rate)}</td>
-                  <td className="num">{price(t.close_rate)}</td>
-                  <td className="muted">{shortDate(t.close_date)}</td>
-                  <td>
+                  <td data-label="Entrada" className="num">{price(t.open_rate)}</td>
+                  <td data-label="Salida" className="num">{price(t.close_rate)}</td>
+                  <td data-label="Cierre" className="muted">{shortDate(t.close_date)}</td>
+                  <td data-label="Profit %">
                     <ProfitCell
                       pct={typeof t.profit_ratio === "number" ? t.profit_ratio * 100 : null}
                     />
                   </td>
-                  <td className={`amt ${abs >= 0 ? "pos" : "neg"}`}>{signed(abs)}</td>
-                  <td className="muted">{t.exit_reason ?? "—"}</td>
+                  <td data-label="Profit" className={`amt ${abs >= 0 ? "pos" : "neg"}`}>{signed(abs)}</td>
+                  <td data-label="Motivo" className="muted">{t.exit_reason ?? "—"}</td>
                 </tr>
               );
             })}

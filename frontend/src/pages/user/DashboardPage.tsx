@@ -114,7 +114,7 @@ export function DashboardPage() {
             {stats.isError || exitReasons.length === 0 ? (
               <p className="muted">Sin datos de salidas todavía.</p>
             ) : (
-              <table>
+              <table className="responsive-table">
                 <thead>
                   <tr>
                     <th>Razón</th>
@@ -126,10 +126,10 @@ export function DashboardPage() {
                 <tbody>
                   {exitReasons.map(([reason, s]) => (
                     <tr key={reason}>
-                      <td>{reason}</td>
-                      <td className="amt pos">{s.wins}</td>
-                      <td className="amt neg">{s.losses}</td>
-                      <td className="muted">{s.draws}</td>
+                      <td data-label="Razón" className="table-primary">{reason}</td>
+                      <td data-label="Ganados" className="amt pos">{s.wins}</td>
+                      <td data-label="Perdidos" className="amt neg">{s.losses}</td>
+                      <td data-label="Empates" className="muted">{s.draws}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -146,7 +146,7 @@ export function DashboardPage() {
         ) : perf.length === 0 ? (
           <p className="muted">Aún no hay trades cerrados.</p>
         ) : (
-          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))" }}>
+          <div className="grid ranking-grid">
             <PairRanking title="Más ganadoras" entries={winners} empty="Sin ganadoras aún." stake={stake} />
             <PairRanking title="Más perdedoras" entries={losers} empty="Sin perdedoras aún." stake={stake} />
           </div>

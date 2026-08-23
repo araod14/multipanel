@@ -34,7 +34,7 @@ export function LoginPage() {
         <input value={identifier} onChange={(e) => setIdentifier(e.target.value)} autoFocus />
         <label>Password</label>
         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-        <div style={{ marginTop: 16 }}>
+        <div className="mt-16">
           <button type="submit" disabled={busy || !identifier || !password}>
             {busy ? "Signing in…" : "Sign in"}
           </button>

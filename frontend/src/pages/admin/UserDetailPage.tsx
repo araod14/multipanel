@@ -63,7 +63,7 @@ export function UserDetailPage() {
 
   return (
     <>
-      <button className="secondary" onClick={() => navigate("/admin")} style={{ marginBottom: 16 }}>
+      <button className="secondary mb-16" onClick={() => navigate("/admin")}>
         ← Back
       </button>
 
@@ -71,12 +71,12 @@ export function UserDetailPage() {
         <h2>Bot — user #{id}</h2>
         {hasBot ? (
           <>
-            <div className="row" style={{ marginBottom: 12 }}>
+            <div className="row mb-12">
               <StatusBadge status={bot.data.status} />
               <ModeBadge dryRun={bot.data.dry_run} />
               <span className="muted">{bot.data.container_name}</span>
             </div>
-            <div className="row">
+            <div className="action-row">
               <button onClick={() => start.mutate()} disabled={busy}>
                 Start
               </button>
@@ -90,7 +90,7 @@ export function UserDetailPage() {
                 Rotate credentials
               </button>
             </div>
-            <div className="row" style={{ marginTop: 14 }}>
+            <div className="action-row mt-14">
               {bot.data.dry_run ? (
                 <button className="danger" onClick={goLive} disabled={busy}>
                   Go LIVE
@@ -204,8 +204,8 @@ function ExchangeCard({
         </>
       )}
 
-      <div className="row">
-        <div style={{ width: 160 }}>
+      <div className="form-grid exchange-form">
+        <div className="field">
           <label>Exchange</label>
           <select value={selected} onChange={(e) => setExchangeName(e.target.value)}>
             {(exchanges.data?.supported ?? []).map((name) => (
@@ -215,15 +215,15 @@ function ExchangeCard({
             ))}
           </select>
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="field">
           <label>API key</label>
           <input value={key} onChange={(e) => setKey(e.target.value)} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="field">
           <label>API secret</label>
           <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} />
         </div>
-        <div style={{ alignSelf: "flex-end" }}>
+        <div className="field-action mt-12">
           <button
             onClick={() => save.mutate(false)}
             disabled={!key || !secret || !selected || save.isPending}
@@ -239,8 +239,7 @@ function ExchangeCard({
       {saveError && <div className="error">{saveError}</div>}
       {meta && (
         <button
-          className="danger"
-          style={{ marginTop: 12 }}
+          className="danger mt-12 mobile-full-button"
           onClick={() => {
             if (
               confirm(

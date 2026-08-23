@@ -132,10 +132,10 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
   };
 
   return (
-    <div className="card" style={{ maxWidth: 640 }}>
+    <div className="card settings-card">
       <h2>Bot settings</h2>
       {isLive && (
-        <div className="row" style={{ marginBottom: 8 }}>
+        <div className="row mb-8">
           <ModeBadge dryRun={false} />
           <span>
             This bot trades REAL money. Saving restarts it immediately. Total exposure is
@@ -179,7 +179,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
               e.target.value = "";
             }}
             disabled={availableCoins.length === 0}
-            style={{ marginBottom: 8 }}
+            className="mb-8"
           >
             <option value="" disabled>
               {availableCoins.length === 0 ? "All coins added" : "Add a coin…"}
@@ -219,12 +219,12 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         </>
       )}
 
-      <div className="row">
-        <div style={{ flex: 1 }}>
+      <div className="form-grid">
+        <div className="field">
           <label>Stake currency</label>
           <input value="USDT" disabled />
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="field">
           <label>
             {isLive
               ? `Stake amount (${data.live_min_stake}–${data.live_max_capital} per trade)`
@@ -232,7 +232,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
           </label>
           <input value={stakeAmount} onChange={(e) => setStakeAmount(e.target.value)} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="field">
           <label>Max open trades</label>
           <input
             type="number"
@@ -244,12 +244,12 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         </div>
       </div>
 
-      <div className="row">
-        <div style={{ flex: 1 }}>
+      <div className="form-grid">
+        <div className="field">
           <label>Stoploss (e.g. -0.10)</label>
           <input type="number" step="0.01" value={stoploss} onChange={(e) => setStoploss(e.target.value)} />
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="field">
           <label>Timeframe</label>
           <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
             {data.available_timeframes.map((t) => (
@@ -259,7 +259,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
             ))}
           </select>
         </div>
-        <div style={{ flex: 1 }}>
+        <div className="field">
           <label>Dry-run wallet</label>
           <input
             type="number"
@@ -279,14 +279,14 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         </p>
       )}
 
-      <label style={{ marginTop: 12 }}>Take-profit ROI table</label>
+      <label className="mt-12">Take-profit ROI table</label>
       <p className="muted">
         Take {`{ROI}`} profit after {`{minutes}`} minutes. The step at 0 minutes is the
         initial target; later steps lower the bar over time.
       </p>
       {roiTable.map((step, i) => (
-        <div className="row" key={i} style={{ marginBottom: 6 }}>
-          <div style={{ flex: 1 }}>
+        <div className="row roi-row" key={i}>
+          <div className="field">
             <input
               type="number"
               min={0}
@@ -296,7 +296,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
               placeholder="minutes"
             />
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="field">
             <input
               type="number"
               step="0.01"
@@ -318,18 +318,18 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         Add ROI step
       </button>
 
-      <label style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+      <label className="checkbox-label mt-12">
         <input
           type="checkbox"
           checked={trailingStop}
           onChange={(e) => setTrailingStop(e.target.checked)}
-          style={{ width: "auto" }}
+          className="checkbox-input"
         />
         Enable trailing stop
       </label>
       {trailingStop && (
-        <div className="row">
-          <div style={{ flex: 1 }}>
+        <div className="form-grid form-grid--two">
+          <div className="field">
             <label>Trailing positive (optional, e.g. 0.01)</label>
             <input
               type="number"
@@ -339,7 +339,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
               placeholder="leave empty to trail from stoploss"
             />
           </div>
-          <div style={{ flex: 1 }}>
+          <div className="field">
             <label>Trailing offset (must exceed positive)</label>
             <input
               type="number"
@@ -351,7 +351,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         </div>
       )}
 
-      <div style={{ marginTop: 16 }}>
+      <div className="mt-16">
         <button className={isLive ? "danger" : undefined} onClick={onSave} disabled={save.isPending}>
           {save.isPending ? "Saving & restarting…" : "Save settings"}
         </button>
