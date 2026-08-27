@@ -56,6 +56,23 @@ class Settings(BaseSettings):
     # smoke tests, which store deliberately fake keys.
     validate_exchange_keys: bool = True
 
+    # --- Trading-state reconciliation ---
+    # Bot containers boot with ``initial_state: stopped``, so a host reboot leaves every
+    # bot idle and silent. ``services/reconciler.py`` re-starts the ones whose owner had
+    # them trading. Seconds between passes; 0 disables the loop entirely.
+    trading_reconcile_interval: float = 60.0
+
+    # --- Public results page (unauthenticated) ---
+    # Serves an anonymous, read-only rollup of every account's trading results at
+    # ``GET /api/public/results``. Set to false to take the page down instantly, with no
+    # code change and no redeploy of the SPA.
+    public_results_enabled: bool = True
+    # Seconds a collected rollup is reused. The endpoint fans out to every bot, so this
+    # is what stops an anonymous burst from amplifying into N requests per caller.
+    public_results_ttl: float = 20.0
+    # Per-IP request budget, in requests per minute, before the endpoint answers 429.
+    public_results_rate_limit: int = 30
+
     # --- Bootstrap admin ---
     bootstrap_admin_email: str = ""
     bootstrap_admin_password: str = ""

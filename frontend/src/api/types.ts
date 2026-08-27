@@ -18,6 +18,9 @@ export interface BotInstance {
   internal_hostname: string;
   status: BotStatus;
   dry_run: boolean;
+  // Whether the owner wants this bot trading. `status` is the container; this is the
+  // trading loop inside it, which the server restores after a reboot.
+  trading_enabled: boolean;
   stake_currency: string;
   created_at: string;
   last_seen_at: string | null;
@@ -191,4 +194,107 @@ export interface FtExitReasonStat {
 export interface FtStats {
   exit_reasons: Record<string, FtExitReasonStat>;
   durations: Record<string, number | null>;
+}
+
+// --- Public results page (GET /api/public/results, no authentication) ---
+// Mirrors backend/app/schemas/public.py. Every live figure is null when that account's
+// bot could not be reached; the configuration fields always have a value.
+
+export interface PublicPairPerf {
+  pair: string;
+  profit_abs: number | null;
+  profit_ratio: number | null;
+  count: number;
+}
+
+export interface PublicDailyPoint {
+  date: string;
+  abs_profit: number | null;
+  rel_profit: number | null;
+  trade_count: number;
+}
+
+export interface PublicAccount {
+  username: string;
+  reachable: boolean;
+  container_state: string | null;
+  bot_state: string | null;
+  trading_enabled: boolean;
+  dry_run: boolean;
+  exchange: string | null;
+
+  strategy_key: string;
+  strategy_label: string;
+  pairlist_mode: string;
+  pairs: string[];
+  volume_number_assets: number;
+  stake_amount: number | string;
+  max_open_trades: number;
+  stoploss: number;
+  timeframe: string;
+  roi_table: RoiStep[];
+  dry_run_wallet: number;
+
+  whitelist: string[] | null;
+
+  profit_closed_abs: number | null;
+  profit_closed_ratio: number | null;
+  profit_all_abs: number | null;
+  profit_all_ratio: number | null;
+  trade_count: number | null;
+  closed_trade_count: number | null;
+  winning_trades: number | null;
+  losing_trades: number | null;
+  winrate: number | null;
+  profit_factor: number | null;
+  expectancy: number | null;
+  expectancy_ratio: number | null;
+  sharpe: number | null;
+  sortino: number | null;
+  sqn: number | null;
+  calmar: number | null;
+  cagr: number | null;
+  max_drawdown: number | null;
+  max_drawdown_abs: number | null;
+  current_drawdown: number | null;
+  trading_volume: number | null;
+  avg_duration: string | null;
+  best_pair: string | null;
+  best_pair_profit_ratio: number | null;
+  first_trade_timestamp: number | null;
+  bot_start_timestamp: number | null;
+
+  balance_total: number | null;
+  balance_total_bot: number | null;
+  starting_capital: number | null;
+  starting_capital_ratio: number | null;
+  open_trades: number | null;
+  total_stake_deployed: number | null;
+
+  performance: PublicPairPerf[];
+  daily: PublicDailyPoint[];
+}
+
+export interface PublicTotals {
+  accounts: number;
+  reachable: number;
+  running: number;
+  live_accounts: number;
+  dry_accounts: number;
+  profit_closed_abs: number;
+  profit_all_abs: number;
+  closed_trade_count: number;
+  winning_trades: number;
+  losing_trades: number;
+  winrate: number | null;
+  open_trades: number;
+  total_stake_deployed: number;
+  balance_total: number;
+}
+
+export interface PublicResults {
+  generated_at: string;
+  stake_currency: string;
+  totals: PublicTotals;
+  accounts: PublicAccount[];
 }

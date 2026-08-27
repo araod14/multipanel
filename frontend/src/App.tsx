@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useAuth } from "./auth/AuthContext";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { LoginPage } from "./pages/LoginPage";
+import { ResultsPage } from "./pages/public/ResultsPage";
 import { AdminLayout } from "./pages/admin/AdminLayout";
 import { UsersPage } from "./pages/admin/UsersPage";
 import { UserDetailPage } from "./pages/admin/UserDetailPage";
@@ -22,6 +23,9 @@ export function App() {
         path="/login"
         element={isAuthed ? <Navigate to={kind === "admin" ? "/admin" : "/app"} replace /> : <LoginPage />}
       />
+
+      {/* Public: no ProtectedRoute, deliberately reachable without a session. */}
+      <Route path="/results" element={<ResultsPage />} />
 
       <Route
         path="/admin"

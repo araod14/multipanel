@@ -17,6 +17,9 @@ control plane securely proxies to that instance's REST API.
 - **Self-service settings** — each user picks a strategy and edits a safe set of
   parameters (pairs, stake, max open trades, stoploss, take-profit ROI, timeframe) from
   their own dashboard; saving re-provisions their bot.
+- **Public results page** — `/results` shows every account's results, efficiency,
+  strategy, pairs and amounts side by side, with **no login**. Read-only, cached and
+  rate limited; turn it off with `CP_PUBLIC_RESULTS_ENABLED=false`.
 - **Secure by construction** — exchange keys encrypted at rest; bots on an internal
   network with no public ports; only the TLS-terminated control plane is exposed.
 
@@ -115,5 +118,11 @@ production specifics in **[`deploy/README.md`](./deploy/README.md)**.
   control plane is exposed, behind TLS.
 - Live trading (`dry_run=false`) is gated: it requires stored exchange credentials.
 - A user can only ever reach **their own** bot instance.
+- The public results page is the one deliberate exception to "everything needs a
+  session". It is read-only, its payload is an explicit field allowlist
+  (`backend/app/schemas/public.py` — no email, container name or credential ever), and
+  it queries a fixed set of Freqtrade endpoints rather than proxying a caller-supplied
+  path. It does publish per-account P&L and balances to anyone who visits, which is the
+  point; `CP_PUBLIC_RESULTS_ENABLED=false` takes it down instantly.
 
 See [`CLAUDE.md`](./CLAUDE.md) for the full developer guide and design invariants.

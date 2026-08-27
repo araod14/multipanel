@@ -1,5 +1,7 @@
 """Control Plane FastAPI application entrypoint."""
 
+import asyncio
+import contextlib
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -10,7 +12,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import FileResponse, JSONResponse
 
 from app.bootstrap import bootstrap_admin, init_database
-from app.routers import admin, auth, user
+from app.config import get_settings
+from app.routers import admin, auth, public, user
+from app.services import reconciler
 from app.services.provisioning import LiveConfigRejected, LiveModeWithoutKeys
 
 logging.basicConfig(level=logging.INFO)
@@ -23,10 +27,20 @@ _SPA_DIST = Path(__file__).resolve().parent.parent / "frontend_dist"
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Initialise the database and bootstrap admin on startup."""
+    """Initialise the database, bootstrap admin, and run the trading reconciler."""
     init_database()
     bootstrap_admin()
-    yield
+
+    task: asyncio.Task | None = None
+    if get_settings().trading_reconcile_interval > 0:
+        task = asyncio.create_task(reconciler.run_forever())
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
 
 
 app = FastAPI(
@@ -39,6 +53,7 @@ app = FastAPI(
 app.include_router(auth.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(user.router, prefix="/api")
+app.include_router(public.router, prefix="/api")
 
 
 @app.exception_handler(LiveModeWithoutKeys)

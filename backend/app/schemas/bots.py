@@ -19,6 +19,9 @@ class BotInstanceOut(BaseModel):
     internal_hostname: str
     status: BotStatus
     dry_run: bool
+    # Whether the owner wants this bot trading. ``status`` is the container; this is the
+    # trading loop inside it, which the reconciler restores after a reboot.
+    trading_enabled: bool
     stake_currency: str
     created_at: datetime
     last_seen_at: datetime | None

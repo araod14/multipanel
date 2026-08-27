@@ -14,7 +14,7 @@ export function AdminLayout() {
       </header>
       <nav className="sidebar">
         <div className="brand"><div className="brand-mark">CP</div><div><strong>Admin</strong><span>Control Plane</span></div></div>
-        <div className="nav-group"><NavLink to="/admin" end><NavIcon name="users" /><span>Users</span></NavLink></div>
+        <div className="nav-group"><NavLink to="/admin" end><NavIcon name="users" /><span>Users</span></NavLink><NavLink to="/results"><NavIcon name="dashboard" /><span>Resultados</span></NavLink></div>
         <div className="spacer" />
         <button className="secondary logout-button" onClick={logout}><NavIcon name="logout" />Log out</button>
       </nav>

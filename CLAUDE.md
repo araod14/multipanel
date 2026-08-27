@@ -59,6 +59,9 @@ CP_BOT_DATA_ROOT=$PWD/_test_bots CP_DEFAULT_EXCHANGE=kraken .venv/bin/python smo
 # Need a control plane already running; pass its port as argv[1], run from backend/:
 .venv/bin/python smoke_proxy.py 9000       # user -> own bot proxy + authorization checks
 .venv/bin/python smoke_hardening.py 9000   # key injection, secret-at-rest, live guard rails
+.venv/bin/python smoke_public.py 9000      # public page: anonymous access, no leaks, cache, 429
+# Needs CP_TRADING_RECONCILE_INTERVAL=30 on the server (see the script's docstring):
+.venv/bin/python smoke_reconcile.py 9000   # trading intent survives a container restart
 ```
 
 `smoke_hardening.py` needs the server started with **`CP_VALIDATE_EXCHANGE_KEYS=false`**:
@@ -97,7 +100,8 @@ already runs nginx for other sites and they would fight over :80/:443. Note that
   directly — **not** passlib, which breaks on bcrypt 4.x), `tokens` (the control plane's
   *own* admin/user JWTs), `deps` (`CurrentAdmin` / `CurrentUser` / `DbSession`).
 - **`routers/`** — `auth` (login/refresh for admins and users), `admin` (user CRUD + bot
-  lifecycle + exchange keys), `user` (the guarded proxy + self-service settings).
+  lifecycle + exchange keys), `user` (the guarded proxy + self-service settings),
+  `public` (the one unauthenticated router — see invariant 7).
 - **`services/`**:
   - `credentials` — CSPRNG generation of a bot's `api_server` username/password/jwt/ws_token.
   - `config_builder` — renders the per-user `config.json` from a non-secret base +
@@ -115,12 +119,19 @@ already runs nginx for other sites and they would fight over :80/:443. Note that
     id, forwards calls with a Bearer header, refreshes once on 401. `invalidate()` after
     re-provisioning.
   - `exchange_creds`, `audit` — encrypted key storage; append-only sensitive-action log.
+  - `public_stats` — the only aggregation layer: fans out over every bot with
+    `asyncio.gather`, behind a TTL cache so an anonymous burst is one fan-out, not N.
+  - `reconciler` — background loop (started from the `main.py` lifespan) that restarts
+    the trading loop of any bot whose `trading_enabled` says it should be running. See
+    the gotcha on `initial_state`.
 
 ### Frontend (`frontend/src/`)
 
 Single SPA, two route trees behind one app: `/admin/*` (admin role) and `/app/*` (user
-role), gated by `ProtectedRoute`. Tokens live in `localStorage` (`api/tokenStore.ts`);
-the axios client (`api/client.ts`) attaches the Bearer header and refreshes once on 401.
+role), gated by `ProtectedRoute`, plus the public `/results` page outside it (which uses
+bare axios, not `api/client.ts`, so a stale token cannot bounce a visitor to `/login`).
+Tokens live in `localStorage` (`api/tokenStore.ts`); the axios client (`api/client.ts`)
+attaches the Bearer header and refreshes once on 401.
 The user area only ever talks to the guarded proxy (`/api/me/bot/ft/*`) and
 `/api/me/bot/config`.
 
@@ -149,7 +160,14 @@ The user area only ever talks to the guarded proxy (`/api/me/bot/ft/*`) and
    never catch them per-route. Real money is bounded twice, on purpose: the control plane
    rejects unsafe settings, *and* `config_builder` emits `available_capital` so Freqtrade
    itself caps total deployable capital regardless of the wallet balance.
-7. **Credentials are allowlisted and verified.** `ExchangeCredentialIn` accepts only
+7. **The public results page publishes, so its payload is an allowlist.** `/api/public/results`
+   has no auth dependency on purpose. Keep all three guards: the response is shaped by
+   `schemas/public.py` (never an email, container name, internal hostname or `*_enc`
+   value); `services/public_stats.py` calls a fixed, hard-coded list of Freqtrade GETs so
+   no caller-supplied path is ever forwarded; and the collection is TTL-cached and
+   per-IP rate limited so it cannot be used to amplify traffic into every bot.
+   `CP_PUBLIC_RESULTS_ENABLED=false` disables it.
+8. **Credentials are allowlisted and verified.** `ExchangeCredentialIn` accepts only
    `SUPPORTED_EXCHANGES`, and `exchange_probe` checks the key against the exchange before
    it is stored. A rejection by the exchange is a 422 and is *never* overridable; an
    unreachable exchange is a 503 that `?force=true` may skip. Keep that asymmetry.
@@ -165,7 +183,19 @@ The user area only ever talks to the guarded proxy (`/api/me/bot/ft/*`) and
 
 - **No migrations.** `alembic` is in requirements but unused; startup calls
   `Base.metadata.create_all`, which does **not** alter existing tables. After changing a
-  model, `rm backend/control_plane.sqlite` (or `make clean`) so it is recreated.
+  model, `rm backend/control_plane.sqlite` (or `make clean`) so it is recreated. That
+  workaround is unavailable in production, so a purely *additive* column can instead be
+  listed in `bootstrap._ADDITIVE_COLUMNS`, which issues an idempotent `ALTER TABLE ADD
+  COLUMN` on boot. Nullable/defaulted columns only — anything that rewrites data still
+  needs a real migration tool.
+- **Bots boot with the trading loop off.** `config_builder` sets
+  `initial_state: stopped`, and a container has no memory of having been started, so a
+  host reboot leaves every bot idle while its container looks perfectly healthy (this
+  happened: three bots sat stopped for two days). `BotInstance.trading_enabled` records
+  what the owner asked for — `routers/user.py` sets it when `POST start`/`stop` is
+  forwarded — and `services/reconciler.py` restores it. The reconciler only ever
+  *starts* a bot, only one that reports `stopped` (a paused bot is left alone), and
+  never touches container lifecycle.
 - **`CP_BOT_ADDRESS_MODE`** is `docker_ip` in dev (the control plane runs on your host
   and resolves container IPs via the Docker SDK) and `dns` in prod (container names on
   the shared network). `make` sets this for you.

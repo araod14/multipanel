@@ -208,6 +208,44 @@ pre.logs { max-height: 360px; margin: 0; overflow: auto; padding: 14px; border: 
 .profit-bar .fill.pos { left: 50%; background: var(--green); }
 .profit-bar .fill.neg { right: 50%; background: var(--red); }
 
+/* --- Public results page (no session, so its own shell instead of the sidebar) --- */
+.public-shell { min-height: 100vh; }
+.public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px clamp(24px, 4vw, 56px);
+  background: rgba(12, 20, 29, .82);
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(16px);
+}
+.public-header .brand { padding: 0; }
+.public-login {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.public-login:hover { border-color: var(--border-strong); }
+.public-shell .content { padding-top: 26px; }
+.mb-0 { margin-bottom: 0; }
+
+/* Hand-rolled equity curve; see components/Sparkline.tsx. */
+.sparkline { display: block; width: 100%; height: 74px; }
+.sparkline .stroke { fill: none; stroke-width: 2; }
+.sparkline .fill { stroke: none; }
+.sparkline.pos .stroke { stroke: var(--green); }
+.sparkline.pos .fill { fill: rgba(50, 213, 131, .13); }
+.sparkline.neg .stroke { stroke: var(--red); }
+.sparkline.neg .fill { fill: rgba(255, 92, 108, .13); }
+
 @media (max-width: 767px) {
   body { background: var(--bg); }
   .layout { display: block; }
@@ -254,6 +292,8 @@ pre.logs { max-height: 360px; margin: 0; overflow: auto; padding: 14px; border: 
   .mobile-stack { align-items: stretch; flex-direction: column; }
   .mobile-stack > *, .mobile-full { width: 100% !important; flex: none !important; }
   .mobile-full-button { width: 100%; }
+  .public-header { padding: 14px; }
+  .public-shell .content { padding-top: 16px; }
 
   table.responsive-table, .responsive-table thead, .responsive-table tbody, .responsive-table tr, .responsive-table td { display: block; width: 100%; }
   .responsive-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -271,6 +311,7 @@ pre.logs { max-height: 360px; margin: 0; overflow: auto; padding: 14px; border: 
   .responsive-table tr.loss { border-left-color: var(--red); }
   .responsive-table tr.win td:first-child, .responsive-table tr.loss td:first-child { box-shadow: none; }
   .responsive-table .profit-cell { align-items: flex-end; }
+  .responsive-table td:not(.table-actions) .row { justify-content: flex-end; }
   .responsive-table .profit-bar { width: 100px; }
   .roi-row { display: grid; grid-template-columns: 1fr 1fr; align-items: end; }
   .roi-row button { grid-column: 1 / -1; width: 100%; }

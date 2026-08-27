@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { userApi } from "../../api/user";
 import type { FtPerformanceEntry, FtProfit } from "../../api/types";
+import { Metric } from "../../components/Metric";
 import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
 import { fmt, pct, signed } from "../../lib/format";
 
@@ -238,27 +239,6 @@ function PairRanking({
           </tbody>
         </table>
       )}
-    </div>
-  );
-}
-
-function Metric({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: React.ReactNode;
-  sub?: React.ReactNode;
-  tone?: number;
-}) {
-  const toneClass = typeof tone === "number" && tone !== 0 ? (tone > 0 ? "pos" : "neg") : "";
-  return (
-    <div className="metric">
-      <div className="muted">{label}</div>
-      <div className={`v ${toneClass}`}>{value}</div>
-      {sub !== undefined && <div className="muted">{sub}</div>}
     </div>
   );
 }

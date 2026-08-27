@@ -46,6 +46,12 @@ class BotInstance(Base):
     )
 
     dry_run: Mapped[bool] = mapped_column(Boolean, default=True)
+    # DESIRED trading state, as opposed to ``status`` (which tracks the container).
+    # Freqtrade containers boot with ``initial_state: stopped`` and forget they were
+    # trading, so after a host reboot every bot silently sits idle. This records what
+    # the user asked for; ``services/reconciler.py`` makes reality match it again.
+    # False by default: a new bot has not been started yet.
+    trading_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     stake_currency: Mapped[str] = mapped_column(String(16), default="USDT")
     db_path: Mapped[str] = mapped_column(String(255))
 

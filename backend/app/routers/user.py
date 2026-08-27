@@ -55,6 +55,17 @@ _ALLOWED_PREFIX: set[tuple[str, str]] = {
 }
 
 
+# Forwarding these also records the user's intent on the BotInstance, so a container
+# that comes back idle (Freqtrade boots with ``initial_state: stopped``) can be resumed
+# by ``services/reconciler.py`` instead of sitting silently stopped. ``pause`` is
+# deliberately absent: it is meant to be temporary, and the reconciler ignores a paused
+# bot anyway.
+_TRADING_INTENT: dict[tuple[str, str], bool] = {
+    ("POST", "start"): True,
+    ("POST", "stop"): False,
+}
+
+
 def _is_allowed(method: str, ft_path: str) -> bool:
     if (method, ft_path) in _ALLOWED_EXACT:
         return True
@@ -143,6 +154,14 @@ async def proxy_to_bot(ft_path: str, request: Request, user: CurrentUser, db: Db
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY, detail=f"bot unreachable: {exc}"
         ) from exc
+
+    # Persist "should this bot be trading?" only once the bot has actually accepted the
+    # command, so a rejected start never leaves the reconciler chasing a bot that cannot
+    # run. This is the sole write on an otherwise read-through proxy.
+    intent = _TRADING_INTENT.get((method, ft_path))
+    if intent is not None and upstream.status_code == 200:
+        instance.trading_enabled = intent
+        db.commit()
 
     return Response(
         content=upstream.content,
