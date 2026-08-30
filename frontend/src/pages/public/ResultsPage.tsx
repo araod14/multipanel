@@ -94,6 +94,7 @@ export function ResultsPage() {
                       <th>Cuenta</th>
                       <th>Estado</th>
                       <th>Estrategia</th>
+                      <th>Timeframe</th>
                       <th>Beneficio</th>
                       <th>ROI</th>
                       <th>Trades</th>
@@ -118,6 +119,9 @@ export function ResultsPage() {
                           </div>
                         </td>
                         <td data-label="Estrategia">{a.strategy_label}</td>
+                        <td data-label="Timeframe" className="num">
+                          {a.timeframe}
+                        </td>
                         <td data-label="Beneficio" className={`amt ${toneClass(a.profit_all_abs)}`}>
                           {a.profit_all_abs === null ? "—" : `${signed(a.profit_all_abs, 2)} ${stake}`}
                         </td>
