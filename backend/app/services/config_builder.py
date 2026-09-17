@@ -53,6 +53,24 @@ _BASE_CONFIG: dict[str, Any] = {
     "internals": {"process_throttle_secs": 5},
 }
 
+# Dry-run trading fee per exchange, as a fraction of the order value.
+#
+# Freqtrade only falls back to ccxt's ``calculate_fee`` when ``fee`` is absent from the
+# config (``Exchange.get_fee``), and since 2026-09-08 ccxt 4.5.x returns ``maker``/
+# ``taker`` of ``None`` for Kraken's USDT spot markets. That ``None`` reaches
+# ``Trade.fee_open`` and kills the worker the first time a trade is opened or closed
+# ("invalid literal for int() with base 10: ''" from ``FtPrecise("None")``), so the
+# container crash-loops instead of trading. Pinning the fee here keeps the dry-run path
+# off ccxt's fee data entirely.
+#
+# Values are each exchange's public top-tier *taker* fee (the pessimistic side).
+_DRY_RUN_FEE: dict[str, float] = {
+    "binance": 0.001,
+    "binanceus": 0.001,
+    "kraken": 0.0026,
+}
+_DEFAULT_DRY_RUN_FEE = 0.0026
+
 
 def build_bot_config(
     *,
@@ -77,6 +95,10 @@ def build_bot_config(
     config["dry_run"] = dry_run
     config["dry_run_wallet"] = user_config["dry_run_wallet"]
     config["exchange"]["name"] = exchange_name
+
+    # Dry run: pin the simulated fee instead of letting freqtrade ask ccxt (see _DRY_RUN_FEE).
+    if dry_run:
+        config["fee"] = _DRY_RUN_FEE.get(exchange_name, _DEFAULT_DRY_RUN_FEE)
 
     # Real money: bound the total capital the bot may ever deploy. Freqtrade computes
     # available capital as ``available_capital + closed profit`` and ignores the real
