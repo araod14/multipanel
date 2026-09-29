@@ -237,6 +237,91 @@ pre.logs { max-height: 360px; margin: 0; overflow: auto; padding: 14px; border: 
 .public-shell .content { padding-top: 26px; }
 .mb-0 { margin-bottom: 0; }
 
+/* Two-column layout: sidebar + main. */
+.public-body {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+.public-aside {
+  position: sticky;
+  top: 20px;
+}
+.public-aside .card { max-height: 70vh; overflow-y: auto; }
+
+/* Technical ratings list. */
+.technical-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.technical-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  font-size: 13px;
+}
+.technical-item .pair {
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.technical-item .label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+.technical-item .label.strong-buy {
+  background: rgba(50, 213, 131, .2);
+  color: var(--green);
+}
+.technical-item .label.buy {
+  background: rgba(50, 213, 131, .15);
+  color: var(--green);
+}
+.technical-item .label.neutral {
+  background: var(--border);
+  color: var(--muted);
+}
+.technical-item .label.sell {
+  background: rgba(255, 92, 108, .15);
+  color: var(--red);
+}
+.technical-item .label.strong-sell {
+  background: rgba(255, 92, 108, .2);
+  color: var(--red);
+}
+.technical-item .timeframe {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  color: var(--muted);
+  margin-left: auto;
+  padding-left: 8px;
+}
+.technical-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+.technical-credit {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
 /* Hand-rolled equity curve; see components/Sparkline.tsx. */
 .sparkline { display: block; width: 100%; height: 74px; }
 .sparkline .stroke { fill: none; stroke-width: 2; }
@@ -250,6 +335,14 @@ pre.logs { max-height: 360px; margin: 0; overflow: auto; padding: 14px; border: 
   body { background: var(--bg); }
   .layout { display: block; }
   .sidebar { display: none; }
+  .public-body {
+    grid-template-columns: 1fr;
+  }
+  .public-aside {
+    order: -1;
+    position: static;
+  }
+  .public-aside .card { max-height: none; }
   .mobile-header {
     display: flex;
     position: sticky;

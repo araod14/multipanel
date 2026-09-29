@@ -72,6 +72,9 @@ class Settings(BaseSettings):
     public_results_ttl: float = 20.0
     # Per-IP request budget, in requests per minute, before the endpoint answers 429.
     public_results_rate_limit: int = 30
+    # Seconds TradingView technical ratings are cached. The scanner is polled once per
+    # collection, so this is only relevant if the public results cache is hit.
+    public_technical_ttl: float = 300.0
 
     # --- Bootstrap admin ---
     bootstrap_admin_email: str = ""

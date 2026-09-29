@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import get_settings
 from app.models.bot_instance import BotInstance
 from app.models.user import User
-from app.services import bot_config, strategy_assets
+from app.services import bot_config, strategy_assets, tradingview
 from app.services.proxy import ProxyError, forward
 from app.services.runtime import BotRuntime
 
@@ -56,11 +56,21 @@ _FT_CALLS: tuple[tuple[str, dict[str, Any] | None], ...] = (
 _cache: tuple[float, dict[str, Any]] | None = None
 _cache_lock = asyncio.Lock()
 
+# (collected_at, ratings) of the last TradingView snapshot.
+_technical_cache: tuple[float, list[dict[str, Any]]] | None = None
+_technical_cache_lock = asyncio.Lock()
+
 
 def invalidate() -> None:
     """Drop the cached snapshot so the next request re-collects."""
     global _cache
     _cache = None
+
+
+def _invalidate_technical() -> None:
+    """Drop the cached technical ratings so the next collection fetches fresh."""
+    global _technical_cache
+    _technical_cache = None
 
 
 def _num(value: Any) -> float | None:
@@ -326,6 +336,57 @@ def _totals(accounts: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+async def _collect_technical(accounts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fetch TradingView technical ratings for the union of all pairs across timeframes.
+
+    Cached with its own TTL to avoid hammering TradingView on every public results request.
+    """
+    global _technical_cache
+    ttl = get_settings().public_technical_ttl
+    now = time.monotonic()
+
+    # Check cache first.
+    cached = _technical_cache
+    if cached is not None and now - cached[0] < ttl:
+        return cached[1]
+
+    async with _technical_cache_lock:
+        # Re-check under the lock.
+        cached = _technical_cache
+        if cached is not None and time.monotonic() - cached[0] < ttl:
+            return cached[1]
+
+        # Collect pairs and timeframes.
+        pairs_by_tf: dict[str, set[str]] = {}
+        for account in accounts:
+            tf = account.get("timeframe", "1d")
+            # Use whitelist if available, else config pairs.
+            pair_list = account.get("whitelist") or account.get("pairs", [])
+            if tf not in pairs_by_tf:
+                pairs_by_tf[tf] = set()
+            pairs_by_tf[tf].update(pair_list)
+
+        # Fetch from TradingView.
+        ratings = await tradingview.ratings(pairs_by_tf)
+
+        # Build result: list of unique (pair, timeframe) with labels.
+        result = []
+        seen = set()
+        for (pair, tf), value in sorted(ratings.items()):
+            key = (pair, tf)
+            if key not in seen:
+                seen.add(key)
+                result.append({
+                    "pair": pair,
+                    "timeframe": tf,
+                    "value": _num(value),
+                    "label": tradingview.label(value),
+                })
+
+        _technical_cache = (time.monotonic(), result)
+        return result
+
+
 async def _collect_uncached(db: Session) -> dict[str, Any]:
     """Collect a fresh snapshot of every provisioned account."""
     rows = db.scalars(
@@ -350,11 +411,16 @@ async def _collect_uncached(db: Session) -> dict[str, Any]:
         key=lambda a: a["profit_all_abs"] if isinstance(a["profit_all_abs"], float) else -math.inf,
         reverse=True,
     )
+
+    # Fetch technical ratings in parallel.
+    technical = await _collect_technical(accounts)
+
     return {
         "generated_at": datetime.now(UTC),
         "stake_currency": bot_config.STAKE_CURRENCY,
         "totals": _totals(accounts),
         "accounts": accounts,
+        "technical": technical,
     }
 
 

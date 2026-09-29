@@ -87,6 +87,12 @@ def main(port: int) -> int:
     leaked = [needle for needle in FORBIDDEN if needle in blob]
     ok_no_leak = not leaked
     print("      leaked:", leaked or "none")
+    # Also ensure technical ratings don't leak usernames or emails.
+    if payload.get("technical"):
+        for tech in payload["technical"]:
+            if any(needle in str(tech).lower() for needle in FORBIDDEN):
+                ok_no_leak = False
+                print("      FAIL: forbidden data in technical ratings")
 
     print("[6/8] The account reports strategy, pairs and amounts ...")
     ok_shape = account is not None and _has_shape(account)

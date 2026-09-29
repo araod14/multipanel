@@ -214,6 +214,13 @@ export interface PublicDailyPoint {
   trade_count: number;
 }
 
+export interface PublicTechnical {
+  pair: string;
+  timeframe: string;
+  value: number | null;
+  label: string | null;
+}
+
 export interface PublicAccount {
   username: string;
   reachable: boolean;
@@ -297,4 +304,5 @@ export interface PublicResults {
   stake_currency: string;
   totals: PublicTotals;
   accounts: PublicAccount[];
+  technical: PublicTechnical[];
 }

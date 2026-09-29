@@ -8,6 +8,7 @@ import { Metric } from "../../components/Metric";
 import { ProfitCell } from "../../components/ProfitCell";
 import { Sparkline } from "../../components/Sparkline";
 import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
+import TechnicalPanel from "../../components/TechnicalPanel";
 import { fmt, pct, signed } from "../../lib/format";
 
 export function ResultsPage() {
@@ -47,8 +48,15 @@ export function ResultsPage() {
             <p className="error">No se pudieron cargar los resultados ahora mismo.</p>
           </div>
         ) : !data ? null : (
-          <>
-            <div className="card">
+          <div className="public-body">
+            <aside className="public-aside">
+              <div className="card">
+                <h3 style={{ marginBottom: "16px" }}>Val. técnica (TradingView)</h3>
+                <TechnicalPanel technical={data.technical || []} />
+              </div>
+            </aside>
+            <div>
+              <div className="card">
               <div className="row space-between mb-16">
                 <h2 className="mb-0">Resumen</h2>
                 <span className="muted">
@@ -160,8 +168,9 @@ export function ResultsPage() {
               )}
             </div>
 
-            {account && <AccountDetail account={account} stake={stake} />}
-          </>
+              {account && <AccountDetail account={account} stake={stake} />}
+            </div>
+          </div>
         )}
       </main>
     </div>

@@ -31,6 +31,15 @@ class PublicDailyPoint(BaseModel):
     trade_count: int
 
 
+class PublicTechnical(BaseModel):
+    """TradingView technical rating for one pair at one timeframe."""
+
+    pair: str
+    timeframe: str
+    value: float | None
+    label: str | None
+
+
 class PublicAccount(BaseModel):
     """One account's public snapshot.
 
@@ -133,3 +142,4 @@ class PublicResultsOut(BaseModel):
     stake_currency: str
     totals: PublicTotals
     accounts: list[PublicAccount]
+    technical: list[PublicTechnical]
