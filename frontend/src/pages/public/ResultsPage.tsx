@@ -51,7 +51,6 @@ export function ResultsPage() {
           <div className="public-body">
             <aside className="public-aside">
               <div className="card">
-                <h3 style={{ marginBottom: "16px" }}>Val. técnica (TradingView)</h3>
                 <TechnicalPanel technical={data.technical || []} />
               </div>
             </aside>

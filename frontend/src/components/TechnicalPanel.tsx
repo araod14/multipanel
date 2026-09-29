@@ -7,8 +7,14 @@ interface TechnicalPanelProps {
 export default function TechnicalPanel({ technical }: TechnicalPanelProps) {
   if (!technical || technical.length === 0) {
     return (
-      <div className="technical-empty">
-        No disponible
+      <div>
+        <div className="technical-header">
+          <h3>Val. técnica (TradingView)</h3>
+          <div className="subtitle">Sin datos disponibles</div>
+        </div>
+        <div className="technical-empty">
+          El servicio no está disponible en este momento
+        </div>
       </div>
     );
   }
@@ -16,28 +22,54 @@ export default function TechnicalPanel({ technical }: TechnicalPanelProps) {
   // Sort by pair name for consistency
   const sorted = [...technical].sort((a, b) => a.pair.localeCompare(b.pair));
 
+  // Count ratings by category
+  const counts = sorted.reduce((acc, item) => {
+    const label = item.label?.toLowerCase() || "unknown";
+    if (label.includes("compra fuerte")) acc.strongBuy++;
+    else if (label.includes("compra")) acc.buy++;
+    else if (label === "neutral") acc.neutral++;
+    else if (label.includes("venta fuerte")) acc.strongSell++;
+    else if (label.includes("venta")) acc.sell++;
+    return acc;
+  }, { strongBuy: 0, buy: 0, neutral: 0, sell: 0, strongSell: 0 });
+
   return (
     <div>
+      <div className="technical-header">
+        <h3>Val. técnica (TradingView)</h3>
+        <div className="subtitle">
+          <span>{sorted.length} pares en análisis</span>
+          {counts.strongBuy > 0 && (
+            <span className="badge" style={{ background: "rgba(50, 213, 131, .2)", color: "#20d580" }}>
+              {counts.strongBuy} fuerte
+            </span>
+          )}
+        </div>
+      </div>
+
       <div className="technical-list">
         {sorted.map((item) => {
           const labelClass = getLabelClass(item.label);
           return (
             <div key={`${item.pair}-${item.timeframe}`} className="technical-item">
-              <span className="pair">{item.pair}</span>
+              <div className="technical-item-header">
+                <span className="pair">{item.pair}</span>
+                <span className="timeframe">{item.timeframe}</span>
+              </div>
               {item.label && (
-                <span className={`label ${labelClass}`}>
+                <span className={`technical-item-label label ${labelClass}`}>
                   {item.label}
                 </span>
               )}
-              <span className="timeframe">{item.timeframe}</span>
             </div>
           );
         })}
       </div>
+
       <div className="technical-credit">
-        Fuente: TradingView
+        📊 Fuente: TradingView
         <br />
-        <em style={{ fontSize: "10px" }}>No es consejo de inversión</em>
+        <em>Fines informativos, no es consejo</em>
       </div>
     </div>
   );
