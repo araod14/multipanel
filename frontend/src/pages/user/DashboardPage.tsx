@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { userApi } from "../../api/user";
 import type { FtPerformanceEntry, FtProfit } from "../../api/types";
 import { Metric } from "../../components/Metric";
-import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
+import { accountOfContainer, ModeBadge, StatusBadge } from "../../components/StatusBadge";
 import { fmt, pct, signed } from "../../lib/format";
 
 export function DashboardPage() {
@@ -61,7 +61,10 @@ export function DashboardPage() {
         ) : (
           <div className="row">
             <StatusBadge status={bot.data!.status} />
-            <ModeBadge dryRun={bot.data!.dry_run} />
+            <ModeBadge
+              dryRun={bot.data!.dry_run}
+              account={accountOfContainer(bot.data!.container_name)}
+            />
             <span className="muted">stake: {bot.data!.stake_currency}</span>
           </div>
         )}

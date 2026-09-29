@@ -123,7 +123,7 @@ export function ResultsPage() {
                           <div className="row">
                             <StatusBadge status={badgeStatus(a)} />
                             <TradingBadge account={a} />
-                            <ModeBadge dryRun={a.dry_run} />
+                            <ModeBadge dryRun={a.dry_run} account={a.username} />
                           </div>
                         </td>
                         <td data-label="Estrategia">{a.strategy_label}</td>
@@ -188,7 +188,7 @@ function AccountDetail({ account: a, stake }: { account: PublicAccount; stake: s
         <div className="row">
           <StatusBadge status={badgeStatus(a)} />
           <TradingBadge account={a} />
-          <ModeBadge dryRun={a.dry_run} />
+          <ModeBadge dryRun={a.dry_run} account={a.username} />
           {a.exchange && <span className="chip chip--plain">{a.exchange}</span>}
         </div>
       </div>
