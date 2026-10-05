@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -40,8 +41,8 @@ export function ControlsPage() {
     if (
       isLive &&
       !confirm(
-        `Force a REAL buy of ${pair} with real money?\n\n` +
-          `This skips the strategy and places the order immediately.`,
+        `¿Forzar una compra REAL de ${pair} con dinero real?\n\n` +
+        `Se omite la estrategia y se envía la orden inmediatamente.`,
       )
     )
       return;
@@ -50,52 +51,55 @@ export function ControlsPage() {
 
   return (
     <>
+      <PageHeading title="Control" description="Gestiona la operación del bot y consulta sus registros." />
       {isLive && (
         <div className="card">
           <div className="row">
             <ModeBadge dryRun={false} />
-            <span>This bot is trading with real money on the exchange.</span>
+            <span>Este bot está operando con dinero real en el exchange.</span>
           </div>
         </div>
       )}
 
       <div className="card">
-        <h2>Trading loop</h2>
+        <h2>Operación del bot</h2>
         <div className="row">
-          <button onClick={() => start.mutate()} disabled={start.isPending}>
-            Start
+          <button onClick={() => start.mutate()} disabled={start.isPending || stop.isPending}>
+            Iniciar
           </button>
-          <button className="secondary" onClick={() => stop.mutate()} disabled={stop.isPending}>
-            Stop
+          <button className="secondary" onClick={() => stop.mutate()} disabled={start.isPending || stop.isPending}>
+            Detener
           </button>
         </div>
+        {(start.isError || stop.isError) && <p className="error" role="alert">No se pudo cambiar el estado del bot.</p>}
       </div>
 
-      <div className="card">
-        <h2>Force entry</h2>
+      <div className="card manual-entry-card">
+        <h2>Entrada manual</h2>
+        <p className="muted">Abre una operación inmediatamente, sin esperar una señal de la estrategia.</p>
         <div className="row mobile-stack">
           <div className="field grow">
-            <label>Pair (e.g. BTC/USDT)</label>
-            <input value={pair} onChange={(e) => setPair(e.target.value)} />
+            <label htmlFor="controlspage-field-1">Par (p. ej. BTC/USDT)</label>
+            <input id="controlspage-field-1" value={pair} onChange={(e) => setPair(e.target.value)} />
           </div>
           <div className="field-action">
             <button className={`mobile-full-button${isLive ? " danger" : ""}`}
               onClick={confirmForceEnter}
               disabled={!pair || forceEnter.isPending}
             >
-              Force enter
+              Abrir operación
             </button>
           </div>
         </div>
-        {forceEnter.isError && <div className="error">Could not force entry.</div>}
+        {forceEnter.isError && <div className="error">No se pudo abrir la operación.</div>}
       </div>
 
       <div className="card">
-        <h2>Logs</h2>
+        <h2>Registros</h2>
         {logs.isError ? (
-          <p className="muted">Unavailable.</p>
+          <p className="muted">No disponible.</p>
         ) : (
-          <pre className="logs">{logLines || "No recent logs."}</pre>
+          <pre className="logs">{logLines || "No hay registros recientes."}</pre>
         )}
       </div>
     </>

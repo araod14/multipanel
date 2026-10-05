@@ -1,177 +1,262 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
 import { publicApi } from "../../api/public";
-import type { BotStatus, PublicAccount, PublicDailyPoint } from "../../api/types";
+import type { BotStatus, PublicAccount, PublicDailyPoint, PublicResults } from "../../api/types";
+import { BrandMark } from "../../components/BrandMark";
 import { Metric } from "../../components/Metric";
 import { ProfitCell } from "../../components/ProfitCell";
 import { Sparkline } from "../../components/Sparkline";
 import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
 import TechnicalPanel from "../../components/TechnicalPanel";
 import { fmt, pct, signed } from "../../lib/format";
+import { filterAccounts, type AccountMode, type AccountOrder } from "../../lib/results";
 
 export function ResultsPage() {
   const [selected, setSelected] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [mode, setMode] = useState<AccountMode>("all");
+  const [order, setOrder] = useState<AccountOrder>("name");
   const results = useQuery({
     queryKey: ["public-results"],
     queryFn: publicApi.results,
     retry: false,
     refetchInterval: 30000,
   });
-
   const data = results.data;
   const stake = data?.stake_currency ?? "USDT";
   const accounts = data?.accounts ?? [];
-  const account = accounts.find((a) => a.username === selected) ?? null;
+  const visible = filterAccounts(accounts, search, mode, order);
+  const toggle = (username: string) => setSelected(selected === username ? null : username);
 
   return (
     <div className="public-shell">
       <header className="public-header">
-        <div className="brand">
-          <div className="brand-mark">CP</div>
-          <div>
-            <strong>Resultados</strong>
-            <span>Rendimiento de cada cuenta, en vivo</span>
-          </div>
-        </div>
+        <Link className="brand" to="/results" aria-label="Control Plane · Resultados">
+          <BrandMark />
+          <div><strong>Control Plane</strong><span>Monitor de trading</span></div>
+        </Link>
         <Link className="public-login" to="/login">
-          Entrar
+          Entrar <span aria-hidden="true">↗</span>
         </Link>
       </header>
-
-      <main className="content">
-        {results.isLoading ? (
-          <p className="muted">Cargando…</p>
-        ) : results.isError ? (
-          <div className="card">
-            <p className="error">No se pudieron cargar los resultados ahora mismo.</p>
+      <main className="content results-content" id="main-content" tabIndex={-1}>
+        <div className="page-heading">
+          <div>
+            <span className="eyebrow">VISTA GENERAL</span>
+            <h1>Resultados</h1>
+            <p className="muted">Tus cuentas, de un vistazo.</p>
           </div>
-        ) : !data ? null : (
-          <div className="public-body">
-            <aside className="public-aside">
-              <div className="card">
-                <TechnicalPanel technical={data.technical || []} />
-              </div>
-            </aside>
-            <div>
-              <div className="card">
-              <div className="row space-between mb-16">
-                <h2 className="mb-0">Resumen</h2>
-                <span className="muted">
-                  {data.totals.reachable} de {data.totals.accounts} bots respondiendo ·
-                  actualizado {new Date(data.generated_at).toLocaleTimeString()}
-                </span>
-              </div>
-              <div className="grid">
-                <Metric label="Cuentas" value={data.totals.accounts} sub={`${data.totals.running} en marcha`} />
-                <Metric
-                  label="Beneficio total"
-                  value={`${signed(data.totals.profit_all_abs, 2)} ${stake}`}
-                  tone={data.totals.profit_all_abs}
-                  sub={`${signed(data.totals.profit_closed_abs, 2)} ${stake} cerrado`}
-                />
-                <Metric
-                  label="Winrate global"
-                  value={data.totals.winrate === null ? "—" : pct(data.totals.winrate)}
-                  sub={`${data.totals.winning_trades}W / ${data.totals.losing_trades}L`}
-                />
-                <Metric label="Trades cerrados" value={data.totals.closed_trade_count} />
-                <Metric
-                  label="Capital desplegado"
-                  value={`${fmt(data.totals.total_stake_deployed, 2)} ${stake}`}
-                  sub={`${data.totals.open_trades} trades abiertos`}
-                />
-                <Metric
-                  label="Balance agregado"
-                  value={`${fmt(data.totals.balance_total, 2)} ${stake}`}
-                  sub={`${data.totals.live_accounts} live · ${data.totals.dry_accounts} dry-run`}
-                />
-              </div>
-            </div>
-
-            <div className="card">
-              <h2>Cuentas</h2>
-              {accounts.length === 0 ? (
-                <p className="muted">Todavía no hay ninguna cuenta con bot aprovisionado.</p>
-              ) : (
-                <table className="responsive-table">
-                  <thead>
-                    <tr>
-                      <th>Cuenta</th>
-                      <th>Estado</th>
-                      <th>Estrategia</th>
-                      <th>Timeframe</th>
-                      <th>Beneficio</th>
-                      <th>ROI</th>
-                      <th>Trades</th>
-                      <th>Winrate</th>
-                      <th>Drawdown</th>
-                      <th>Stake</th>
-                      <th>Pares</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {accounts.map((a) => (
-                      <tr key={a.username} className={rowTone(a)}>
-                        <td className="table-primary" data-label="Cuenta">
-                          {a.username}
-                        </td>
-                        <td data-label="Estado">
-                          <div className="row">
-                            <StatusBadge status={badgeStatus(a)} />
-                            <TradingBadge account={a} />
-                            <ModeBadge dryRun={a.dry_run} account={a.username} />
-                          </div>
-                        </td>
-                        <td data-label="Estrategia">{a.strategy_label}</td>
-                        <td data-label="Timeframe" className="num">
-                          {a.timeframe}
-                        </td>
-                        <td data-label="Beneficio" className={`amt ${toneClass(a.profit_all_abs)}`}>
-                          {a.profit_all_abs === null ? "—" : `${signed(a.profit_all_abs, 2)} ${stake}`}
-                        </td>
-                        <td data-label="ROI">
-                          <ProfitCell
-                            pct={a.profit_all_ratio === null ? null : a.profit_all_ratio * 100}
-                          />
-                        </td>
-                        <td data-label="Trades" className="num">
-                          {a.closed_trade_count ?? "—"}
-                        </td>
-                        <td data-label="Winrate" className="num">
-                          {a.winrate === null ? "—" : pct(a.winrate)}
-                        </td>
-                        <td data-label="Drawdown" className="num">
-                          {a.max_drawdown === null ? "—" : pct(a.max_drawdown)}
-                        </td>
-                        <td data-label="Stake" className="num">
-                          {stakeText(a, stake)}
-                        </td>
-                        <td data-label="Pares" className="num">
-                          {(a.whitelist ?? a.pairs).length}
-                        </td>
-                        <td className="table-actions">
-                          <button
-                            className="secondary"
-                            onClick={() => setSelected(selected === a.username ? null : a.username)}
-                          >
-                            {selected === a.username ? "Ocultar" : "Detalle"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-              {account && <AccountDetail account={account} stake={stake} />}
-            </div>
+          <div className="refresh-controls">
+            <span className="muted">
+              {data
+                ? `Datos de ${new Date(data.generated_at).toLocaleTimeString("es", {
+                  hour: "2-digit", minute: "2-digit", second: "2-digit",
+                })}`
+                : "Actualización cada 30 s"}
+            </span>
+            <button className="secondary" onClick={() => void results.refetch()} disabled={results.isFetching}>
+              {results.isFetching ? "Actualizando…" : "Actualizar"}
+            </button>
+          </div>
+        </div>
+        {results.isError && (
+          <div className="notice notice--error" role="alert">
+            <p>{data
+              ? "No se pudo actualizar. Se muestran los últimos datos disponibles."
+              : "No se pudieron cargar los resultados."}</p>
+            <button className="secondary" onClick={() => void results.refetch()} disabled={results.isFetching}>
+              Reintentar
+            </button>
           </div>
         )}
+        {!data && results.isLoading && (
+          <div className="loading-state" role="status"><span className="loading-dot" />Cargando resultados…</div>
+        )}
+        {data && (
+          <>
+            <ResultsSummary data={data} stake={stake} />
+            <section className="accounts-section" aria-labelledby="accounts-title">
+              <div className="section-heading">
+                <h2 id="accounts-title">Cuentas</h2>
+                <span className="muted" role="status">{visible.length} de {accounts.length}</span>
+              </div>
+              <div className="accounts-toolbar">
+                <div className="search-field">
+                  <label htmlFor="account-search">Buscar cuenta</label>
+                  <input id="account-search" type="search" placeholder="Nombre de la cuenta…"
+                    value={search} onChange={(e) => setSearch(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="account-mode">Modo</label>
+                  <select id="account-mode" value={mode} onChange={(e) => setMode(e.target.value as AccountMode)}>
+                    <option value="all">Todas</option>
+                    <option value="live">Real</option>
+                    <option value="dry">Simulación</option>
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="account-order">Ordenar por</label>
+                  <select id="account-order" value={order} onChange={(e) => setOrder(e.target.value as AccountOrder)}>
+                    <option value="name">Nombre · A–Z</option>
+                    <option value="profit">Beneficio · mayor primero</option>
+                    <option value="roi">ROI · mayor primero</option>
+                  </select>
+                </div>
+              </div>
+              {visible.length === 0 ? (
+                <div className="empty-state">
+                  <h3>{accounts.length === 0 ? "Todavía no hay cuentas" : "Sin coincidencias"}</h3>
+                  <p className="muted">{accounts.length === 0
+                    ? "Las cuentas aparecerán cuando tengan un bot aprovisionado."
+                    : "Prueba otro nombre o cambia el modo."}</p>
+                  {accounts.length > 0 && (
+                    <button className="secondary" onClick={() => { setSearch(""); setMode("all"); }}>
+                      Limpiar filtros
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="mobile-accounts">
+                    {visible.map((a) => (
+                      <AccountCard key={a.username} account={a} stake={stake}
+                        expanded={selected === a.username} onToggle={() => toggle(a.username)} />
+                    ))}
+                  </div>
+                  <div className="desktop-accounts card">
+                    <table className="accounts-table">
+                      <caption className="sr-only">Comparación de rendimiento de las cuentas</caption>
+                      <thead>
+                        <tr>
+                          <th>Cuenta / estrategia</th><th>Estado</th><th>Beneficio</th>
+                          <th>ROI</th><th>Trades</th><th>Winrate</th><th><span className="sr-only">Detalle</span></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visible.map((a) => (
+                          <AccountRow key={a.username} account={a} stake={stake}
+                            expanded={selected === a.username} onToggle={() => toggle(a.username)} />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </section>
+            <details className="card market-disclosure disclosure">
+              <summary>
+                <span>Valoración técnica <span className="muted">TradingView · {data.technical?.length ?? 0} pares</span></span>
+              </summary>
+              <div className="disclosure-body"><TechnicalPanel technical={data.technical ?? []} /></div>
+            </details>
+            <footer className="results-footer muted">
+              Control Plane <span>Actualización automática cada 30 segundos</span>
+            </footer>
+          </>
+        )}
       </main>
+    </div>
+  );
+}
+
+function ResultsSummary({ data, stake }: { data: PublicResults; stake: string }) {
+  const totals = data.totals;
+  return (
+    <section className="summary-section" aria-labelledby="summary-title">
+      <div className="section-heading">
+        <h2 id="summary-title">Resumen global</h2>
+        <span className="muted">{totals.accounts} cuentas · real y simulación</span>
+      </div>
+      <div className="grid summary-grid">
+        <Metric label="Beneficio total" value={`${signed(totals.profit_all_abs, 2)} ${stake}`}
+          tone={totals.profit_all_abs} sub={`${signed(totals.profit_closed_abs, 2)} ${stake} cerrado`} />
+        <Metric label="Balance agregado" value={`${fmt(totals.balance_total, 2)} ${stake}`}
+          sub={`${totals.live_accounts} real · ${totals.dry_accounts} simulación`} />
+        <Metric label="Winrate global" value={pct(totals.winrate)}
+          sub={`${totals.winning_trades} ganados / ${totals.losing_trades} perdidos`} />
+        <Metric label="Operaciones cerradas" value={totals.closed_trade_count} sub={`${totals.open_trades} abiertas`} />
+        <Metric label="Capital desplegado" value={`${fmt(totals.total_stake_deployed, 2)} ${stake}`} />
+        <Metric label="Bots disponibles" value={`${totals.reachable} / ${totals.accounts}`} sub={`${totals.running} en marcha`} />
+      </div>
+    </section>
+  );
+}
+
+type AccountViewProps = {
+  account: PublicAccount;
+  stake: string;
+  expanded: boolean;
+  onToggle: () => void;
+};
+
+function AccountCard({ account: a, stake, expanded, onToggle }: AccountViewProps) {
+  const target = `mobile-detail-${a.username}`;
+  return (
+    <article className={`account-card ${rowTone(a)}`}>
+      <div className="account-card-heading">
+        <div><h3>{a.username}</h3><p className="muted">{a.strategy_label} · {a.timeframe}</p></div>
+        <ModeBadge dryRun={a.dry_run} account={a.username} />
+      </div>
+      <AccountState account={a} />
+      <div className="account-figures">
+        <div>
+          <span className="muted">Beneficio total</span>
+          <strong className={`amt ${toneClass(a.profit_all_abs)}`}>
+            {a.profit_all_abs === null ? "—" : `${signed(a.profit_all_abs, 2)} ${stake}`}
+          </strong>
+        </div>
+        <div><span className="muted">ROI</span><strong className={`amt ${toneClass(a.profit_all_ratio)}`}>{pct(a.profit_all_ratio)}</strong></div>
+      </div>
+      <DetailButton account={a} expanded={expanded} onClick={onToggle} target={target} />
+      {expanded && <div id={target}><AccountDetail account={a} stake={stake} /></div>}
+    </article>
+  );
+}
+
+function AccountRow({ account: a, stake, expanded, onToggle }: AccountViewProps) {
+  const target = `desktop-detail-${a.username}`;
+  return (
+    <Fragment>
+      <tr className={rowTone(a)}>
+        <td className="table-primary"><strong>{a.username}</strong><span className="table-subtitle">{a.strategy_label} · {a.timeframe}</span></td>
+        <td><AccountState account={a} /><div className="mt-8"><ModeBadge dryRun={a.dry_run} account={a.username} /></div></td>
+        <td className={`amt ${toneClass(a.profit_all_abs)}`}>
+          {a.profit_all_abs === null ? "—" : `${signed(a.profit_all_abs, 2)} ${stake}`}
+        </td>
+        <td><ProfitCell pct={a.profit_all_ratio === null ? null : a.profit_all_ratio * 100} /></td>
+        <td className="num">{a.closed_trade_count ?? "—"}</td>
+        <td className="num">{pct(a.winrate)}</td>
+        <td><DetailButton account={a} expanded={expanded} onClick={onToggle} target={target} /></td>
+      </tr>
+      {expanded && (
+        <tr className="detail-row">
+          <td colSpan={7}><div id={target}><AccountDetail account={a} stake={stake} /></div></td>
+        </tr>
+      )}
+    </Fragment>
+  );
+}
+
+function DetailButton({ account, expanded, onClick, target }: {
+  account: PublicAccount; expanded: boolean; onClick: () => void; target: string;
+}) {
+  return (
+    <button className="secondary detail-button"
+      aria-label={`${expanded ? "Ocultar" : "Ver"} detalle de ${account.username}`}
+      aria-expanded={expanded} aria-controls={expanded ? target : undefined} onClick={onClick}>
+      {expanded ? "Ocultar detalle" : "Ver detalle"}<span aria-hidden="true">{expanded ? "−" : "+"}</span>
+    </button>
+  );
+}
+
+function AccountState({ account }: { account: PublicAccount }) {
+  return (
+    <div className="row account-state">
+      <StatusBadge status={badgeStatus(account)} />
+      <TradingBadge account={account} />
+      {!account.reachable && <span className="badge error">Sin conexión</span>}
     </div>
   );
 }
@@ -181,7 +266,7 @@ function AccountDetail({ account: a, stake }: { account: PublicAccount; stake: s
   const perf = [...a.performance].sort((x, y) => (y.profit_abs ?? 0) - (x.profit_abs ?? 0));
 
   return (
-    <div className="card">
+    <div className="account-detail">
       <div className="row space-between mb-16">
         <h2 className="mb-0">{a.username}</h2>
         <div className="row">
@@ -198,7 +283,7 @@ function AccountDetail({ account: a, stake }: { account: PublicAccount; stake: s
         </p>
       )}
 
-      <h3 className="subhead">Resultados</h3>
+      <h3 className="subhead">Rendimiento</h3>
       <div className="grid">
         <Metric
           label="Beneficio total"
@@ -215,125 +300,140 @@ function AccountDetail({ account: a, stake }: { account: PublicAccount; stake: s
         <Metric
           label="Winrate"
           value={a.winrate === null ? "—" : pct(a.winrate)}
-          sub={`${a.winning_trades ?? 0}W / ${a.losing_trades ?? 0}L`}
+          sub={`${a.winning_trades ?? "—"} ganados / ${a.losing_trades ?? "—"} perdidos`}
         />
         <Metric
           label="Trades"
           value={a.closed_trade_count ?? "—"}
           sub={`${a.trade_count ?? 0} en total`}
         />
-        <Metric label="Profit factor" {...profitFactor(a)} />
-        <Metric
-          label="Expectancy"
-          value={fmt(a.expectancy, 4)}
-          sub={a.expectancy_ratio === null ? undefined : `ratio ${fmt(a.expectancy_ratio, 2)}`}
-        />
-        <Metric
-          label="Drawdown máx."
-          value={a.max_drawdown === null ? "—" : pct(a.max_drawdown)}
-          sub={a.max_drawdown_abs === null ? undefined : `${fmt(a.max_drawdown_abs, 2)} ${stake}`}
-        />
-        <Metric
-          label="Drawdown actual"
-          value={a.current_drawdown === null ? "—" : pct(a.current_drawdown)}
-        />
-        <Metric label="Sharpe" value={fmt(a.sharpe, 2)} />
-        <Metric label="Sortino" value={fmt(a.sortino, 2)} />
-        <Metric label="Calmar" value={fmt(a.calmar, 2)} />
-        <Metric label="SQN" value={fmt(a.sqn, 2)} />
-        <Metric label="Duración media" value={a.avg_duration ?? "—"} />
-        <Metric
-          label="Mejor par"
-          value={a.best_pair || "—"}
-          sub={a.best_pair ? pct(a.best_pair_profit_ratio) : undefined}
-        />
       </div>
-
-      <h3 className="subhead">Montos</h3>
-      <div className="grid">
-        <Metric label="Balance" value={`${fmt(a.balance_total, 2)} ${stake}`} />
-        <Metric label="Balance del bot" value={`${fmt(a.balance_total_bot, 2)} ${stake}`} />
-        <Metric
-          label="Capital inicial"
-          value={`${fmt(a.starting_capital, 2)} ${stake}`}
-          sub={a.starting_capital_ratio === null ? undefined : pct(a.starting_capital_ratio)}
-        />
-        <Metric label="Stake por trade" value={stakeText(a, stake)} />
-        <Metric
-          label="Capital desplegado"
-          value={a.total_stake_deployed === null ? "—" : `${fmt(a.total_stake_deployed, 2)} ${stake}`}
-          sub={`${a.open_trades ?? 0} / ${a.max_open_trades} trades abiertos`}
-        />
-        <Metric label="Volumen operado" value={`${fmt(a.trading_volume, 2)} ${stake}`} />
-      </div>
-
-      <h3 className="subhead">Configuración</h3>
-      <div className="grid">
-        <Metric label="Estrategia" value={a.strategy_label} sub={a.strategy_key} />
-        <Metric label="Timeframe" value={a.timeframe} />
-        <Metric label="Stoploss" value={pct(a.stoploss)} />
-        <Metric
-          label="ROI objetivo"
-          value={a.roi_table.length ? pct(a.roi_table[0].roi) : "—"}
-          sub={`${a.roi_table.length} escalón(es)`}
-        />
-        <Metric
-          label="Lista de pares"
-          value={a.pairlist_mode === "volume" ? "Por volumen" : "Fija"}
-          sub={a.pairlist_mode === "volume" ? `top ${a.volume_number_assets}` : `${a.pairs.length} pares`}
-        />
-        <Metric label="Máx. trades" value={a.max_open_trades} />
-      </div>
-
-      <h3 className="subhead">Pares operados</h3>
-      {pairs.length === 0 ? (
-        <p className="muted">Sin pares.</p>
-      ) : (
-        <div className="row">
-          {pairs.map((p) => (
-            <span key={p} className="chip chip--plain">
-              {p}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <h3 className="subhead">Evolución (30 días)</h3>
+      <h3 className="subhead">Evolución del beneficio · últimos 30 días</h3>
       <Sparkline values={cumulative(a.daily)} label={`Beneficio acumulado de ${a.username}`} />
 
-      <h3 className="subhead">Rendimiento por par</h3>
-      {perf.length === 0 ? (
-        <p className="muted">Todavía no hay trades cerrados.</p>
-      ) : (
-        <table className="responsive-table">
-          <thead>
-            <tr>
-              <th>Par</th>
-              <th>Beneficio</th>
-              <th>ROI</th>
-              <th>Trades</th>
-            </tr>
-          </thead>
-          <tbody>
-            {perf.map((e) => (
-              <tr key={e.pair} className={(e.profit_abs ?? 0) >= 0 ? "win" : "loss"}>
-                <td className="table-primary" data-label="Par">
-                  {e.pair}
-                </td>
-                <td data-label="Beneficio" className={`amt ${toneClass(e.profit_abs)}`}>
-                  {signed(e.profit_abs, 2)} {stake}
-                </td>
-                <td data-label="ROI">
-                  <ProfitCell pct={e.profit_ratio === null ? null : e.profit_ratio * 100} />
-                </td>
-                <td data-label="Trades" className="num">
-                  {e.count}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+      <details className="disclosure">
+        <summary>Métricas avanzadas</summary>
+        <div className="disclosure-body grid">
+          <Metric label="Profit factor" {...profitFactor(a)} />
+          <Metric
+            label="Expectancy"
+            value={fmt(a.expectancy, 4)}
+            sub={a.expectancy_ratio === null ? undefined : `ratio ${fmt(a.expectancy_ratio, 2)}`}
+          />
+          <Metric
+            label="Drawdown máx."
+            value={a.max_drawdown === null ? "—" : pct(a.max_drawdown)}
+            sub={a.max_drawdown_abs === null ? undefined : `${fmt(a.max_drawdown_abs, 2)} ${stake}`}
+          />
+          <Metric
+            label="Drawdown actual"
+            value={a.current_drawdown === null ? "—" : pct(a.current_drawdown)}
+          />
+          <Metric label="Sharpe" value={fmt(a.sharpe, 2)} />
+          <Metric label="Sortino" value={fmt(a.sortino, 2)} />
+          <Metric label="Calmar" value={fmt(a.calmar, 2)} />
+          <Metric label="SQN" value={fmt(a.sqn, 2)} />
+          <Metric label="Duración media" value={a.avg_duration ?? "—"} />
+          <Metric
+            label="Mejor par"
+            value={a.best_pair || "—"}
+            sub={a.best_pair ? pct(a.best_pair_profit_ratio) : undefined}
+          />
+        </div>
+
+      </details>
+      <details className="disclosure">
+        <summary>Capital y montos</summary>
+        <div className="disclosure-body grid">
+          <Metric label="Balance" value={`${fmt(a.balance_total, 2)} ${stake}`} />
+          <Metric label="Balance del bot" value={`${fmt(a.balance_total_bot, 2)} ${stake}`} />
+          <Metric
+            label="Capital inicial"
+            value={`${fmt(a.starting_capital, 2)} ${stake}`}
+            sub={a.starting_capital_ratio === null ? undefined : pct(a.starting_capital_ratio)}
+          />
+          <Metric label="Stake por trade" value={stakeText(a, stake)} />
+          <Metric
+            label="Capital desplegado"
+            value={a.total_stake_deployed === null ? "—" : `${fmt(a.total_stake_deployed, 2)} ${stake}`}
+            sub={`${a.open_trades ?? "—"} / ${a.max_open_trades} trades abiertos`}
+          />
+          <Metric label="Volumen operado" value={`${fmt(a.trading_volume, 2)} ${stake}`} />
+        </div>
+
+      </details>
+      <details className="disclosure">
+        <summary>Configuración y pares</summary>
+        <div className="disclosure-body">
+          <div className="grid">
+            <Metric label="Estrategia" value={a.strategy_label} sub={a.strategy_key} />
+            <Metric label="Timeframe" value={a.timeframe} />
+            <Metric label="Stoploss" value={pct(a.stoploss)} />
+            <Metric
+              label="ROI objetivo"
+              value={a.roi_table.length ? pct(a.roi_table[0].roi) : "—"}
+              sub={`${a.roi_table.length} escalón(es)`}
+            />
+            <Metric
+              label="Lista de pares"
+              value={a.pairlist_mode === "volume" ? "Por volumen" : "Fija"}
+              sub={a.pairlist_mode === "volume" ? `top ${a.volume_number_assets}` : `${a.pairs.length} pares`}
+            />
+            <Metric label="Máx. trades" value={a.max_open_trades} />
+          </div>
+
+          <h3 className="subhead">Pares operados</h3>
+          {pairs.length === 0 ? (
+            <p className="muted">Sin pares.</p>
+          ) : (
+            <div className="row">
+              {pairs.map((p) => (
+                <span key={p} className="chip chip--plain">
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
+
+        </div>
+      </details>
+      <details className="disclosure">
+        <summary>Rendimiento por par</summary>
+        <div className="disclosure-body">
+          {perf.length === 0 ? (
+            <p className="muted">Todavía no hay trades cerrados.</p>
+          ) : (
+            <table className="responsive-table">
+              <thead>
+                <tr>
+                  <th>Par</th>
+                  <th>Beneficio</th>
+                  <th>ROI</th>
+                  <th>Trades</th>
+                </tr>
+              </thead>
+              <tbody>
+                {perf.map((e) => (
+                  <tr key={e.pair} className={(e.profit_abs ?? 0) >= 0 ? "win" : "loss"}>
+                    <td className="table-primary" data-label="Par">
+                      {e.pair}
+                    </td>
+                    <td data-label="Beneficio" className={`amt ${toneClass(e.profit_abs)}`}>
+                      {signed(e.profit_abs, 2)} {stake}
+                    </td>
+                    <td data-label="ROI">
+                      <ProfitCell pct={e.profit_ratio === null ? null : e.profit_ratio * 100} />
+                    </td>
+                    <td data-label="Trades" className="num">
+                      {e.count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </details>
     </div>
   );
 }

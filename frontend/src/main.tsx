@@ -16,6 +16,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
+          <a className="skip-link" href="#main-content">Saltar al contenido</a>
           <App />
         </AuthProvider>
       </BrowserRouter>

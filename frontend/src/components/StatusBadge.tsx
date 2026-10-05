@@ -15,7 +15,8 @@ export function accountOfContainer(containerName: string): string {
 }
 
 export function StatusBadge({ status }: { status: BotStatus }) {
-  return <span className={`badge ${status}`}>{status}</span>;
+  const labels: Record<BotStatus, string> = { provisioned: "Preparado", running: "En marcha", stopped: "Detenido", error: "No disponible" };
+  return <span className={`badge ${status}`}>{labels[status]}</span>;
 }
 
 /**
@@ -24,5 +25,5 @@ export function StatusBadge({ status }: { status: BotStatus }) {
  */
 export function ModeBadge({ dryRun, account }: { dryRun: boolean; account?: string }) {
   if (account !== undefined && MODE_BADGE_HIDDEN.has(account)) return null;
-  return <span className={`badge ${dryRun ? "dry" : "live"}`}>{dryRun ? "dry-run" : "LIVE"}</span>;
+  return <span className={`badge ${dryRun ? "dry" : "live"}`}>{dryRun ? "Simulación" : "Real"}</span>;
 }

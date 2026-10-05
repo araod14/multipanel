@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
@@ -7,7 +8,7 @@ import { adminApi } from "../../api/admin";
 export function UsersPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { data: users, isLoading } = useQuery({
+  const { data: users, isLoading, isError, refetch } = useQuery({
     queryKey: ["users"],
     queryFn: adminApi.listUsers,
   });
@@ -26,7 +27,7 @@ export function UsersPage() {
       setError(null);
       qc.invalidateQueries({ queryKey: ["users"] });
     },
-    onError: () => setError("Could not create user (duplicate username/email?)"),
+    onError: () => setError("No se pudo crear el usuario. Revisa si el nombre o correo ya existe."),
   });
 
   const deleteUser = useMutation({
@@ -36,20 +37,21 @@ export function UsersPage() {
 
   return (
     <>
+      <PageHeading title="Usuarios" description="Gestiona las cuentas y sus bots de trading." />
       <div className="card">
-        <h2>Create user</h2>
+        <h2>Crear usuario</h2>
         <div className="form-grid create-user-form">
           <div className="field">
-            <label>Username</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} />
+            <label htmlFor="userspage-field-1">Usuario</label>
+            <input id="userspage-field-1" value={username} onChange={(e) => setUsername(e.target.value)} />
           </div>
           <div className="field">
-            <label>Email</label>
-            <input value={email} onChange={(e) => setEmail(e.target.value)} />
+            <label htmlFor="userspage-field-2">Correo</label>
+            <input id="userspage-field-2" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="field">
-            <label>Password</label>
-            <input
+            <label htmlFor="userspage-field-3">Contraseña</label>
+            <input id="userspage-field-3"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -60,7 +62,7 @@ export function UsersPage() {
               onClick={() => createUser.mutate()}
               disabled={!username || !email || password.length < 8 || createUser.isPending}
             >
-              Create
+              Crear
             </button>
           </div>
         </div>
@@ -68,17 +70,19 @@ export function UsersPage() {
       </div>
 
       <div className="card">
-        <h2>Users</h2>
+        <h2>Usuarios</h2>
         {isLoading ? (
-          <p className="muted">Loading…</p>
+          <p className="muted">Cargando…</p>
+        ) : isError ? (
+          <div className="notice notice--error" role="alert"><p>No se pudieron cargar los usuarios.</p><button className="secondary" onClick={() => void refetch()}>Reintentar</button></div>
         ) : (
           <table className="responsive-table">
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Username</th>
-                <th>Email</th>
-                <th>Status</th>
+                <th>Usuario</th>
+                <th>Correo</th>
+                <th>Estado</th>
                 <th></th>
               </tr>
             </thead>
@@ -87,21 +91,22 @@ export function UsersPage() {
                 <tr key={u.id}>
                   <td data-label="ID">{u.id}</td>
                   <td data-label="Usuario" className="table-primary">{u.username}</td>
-                  <td data-label="Email">{u.email}</td>
-                  <td data-label="Estado">{u.status}</td>
+                  <td data-label="Correo">{u.email}</td>
+                  <td data-label="Estado"><span className={`badge ${u.status === "active" ? "running" : "stopped"}`}>{u.status === "active" ? "Activo" : "Suspendido"}</span></td>
                   <td data-label="Acciones" className="table-actions">
                     <div className="row">
                       <button className="secondary" onClick={() => navigate(`/admin/users/${u.id}`)}>
-                        Manage
+                        Gestionar
                       </button>
                       <button
                         className="danger"
+                        disabled={deleteUser.isPending}
                         onClick={() => {
-                          if (confirm(`Delete user ${u.username} and its bot?`))
+                          if (confirm(`¿Eliminar el usuario ${u.username} y su bot?`))
                             deleteUser.mutate(u.id);
                         }}
                       >
-                        Delete
+                        Eliminar
                       </button>
                     </div>
                   </td>
@@ -110,7 +115,7 @@ export function UsersPage() {
               {users?.length === 0 && (
                 <tr>
                   <td colSpan={5} className="muted">
-                    No users yet.
+                    Todavía no hay usuarios.
                   </td>
                 </tr>
               )}
@@ -118,6 +123,7 @@ export function UsersPage() {
           </table>
         )}
       </div>
+      {deleteUser.isError && <p className="error" role="alert">No se pudo eliminar el usuario.</p>}
     </>
   );
 }

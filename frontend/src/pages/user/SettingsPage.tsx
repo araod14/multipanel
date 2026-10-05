@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AxiosError } from "axios";
@@ -10,11 +11,14 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const cfg = useQuery({ queryKey: ["me-config"], queryFn: userApi.getConfig, retry: false });
 
-  if (cfg.isLoading) return <div className="card">Loading…</div>;
+  if (cfg.isLoading) return <div className="card">Cargando…</div>;
   if (cfg.isError)
-    return <div className="card error">No bot is provisioned for your account yet.</div>;
+    return <div className="card error">Tu cuenta todavía no tiene un bot aprovisionado.</div>;
 
-  return <SettingsForm data={cfg.data!} onSaved={() => qc.invalidateQueries()} />;
+  return <>
+    <PageHeading title="Ajustes" description="Configura la estrategia, el capital y los límites de tu bot." />
+    <SettingsForm data={cfg.data!} onSaved={() => qc.invalidateQueries()} />
+  </>;
 }
 
 function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void }) {
@@ -106,7 +110,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
     },
     onError: (e: AxiosError<{ detail: string }>) => {
       setSaved(false);
-      setError(e.response?.data?.detail ?? "Could not save settings");
+      setError(e.response?.data?.detail ?? "No se pudieron guardar los ajustes");
     },
   });
 
@@ -121,10 +125,10 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
     if (
       isLive &&
       !confirm(
-        `Save and restart the bot with REAL money?\n\n` +
-          `Exposure: ${exposure ?? "?"} ${data.stake_currency} ` +
-          `(${stakeAmount} x ${maxOpen} trades), limit ${data.live_max_capital}.\n` +
-          `Pairs: ${pairlistMode === "static" ? pairs.join(", ") : `top ${volumeN} by volume`}.`,
+        `¿Guardar y reiniciar el bot con dinero REAL?\n\n` +
+        `Exposición: ${exposure ?? "?"} ${data.stake_currency} ` +
+        `(${stakeAmount} x ${maxOpen} operaciones), límite ${data.live_max_capital}.\n` +
+        `Pares: ${pairlistMode === "static" ? pairs.join(", ") : `top ${volumeN} por volumen`}.`,
       )
     )
       return;
@@ -133,125 +137,36 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
 
   return (
     <div className="card settings-card">
-      <h2>Bot settings</h2>
+      <h2>Ajustes del bot</h2>
       {isLive && (
         <div className="row mb-8">
           <ModeBadge dryRun={false} />
           <span>
-            This bot trades REAL money. Saving restarts it immediately. Total exposure is
-            capped at {data.live_max_capital} {data.stake_currency}.
+            Este bot opera con dinero REAL. Guardar lo reinicia inmediatamente. La exposición máxima es {data.live_max_capital} {data.stake_currency}.
           </span>
         </div>
       )}
       <p className="muted">
-        Saving applies your settings and restarts the bot. All pairs are quoted in USDT.
+        Al guardar se aplican los ajustes y se reinicia el bot. Todos los pares cotizan en USDT.
       </p>
 
-      <label>Strategy</label>
-      <select value={strategy} onChange={(e) => setStrategy(e.target.value)}>
-        {data.available_strategies.map((s) => (
-          <option key={s.key} value={s.key}>
-            {s.label}
-          </option>
-        ))}
-      </select>
-      {(() => {
-        const selected = data.available_strategies.find((s) => s.key === strategy);
-        return selected ? <p className="muted">{selected.description}</p> : null;
-      })()}
-
-      <label>Pair selection</label>
-      <select
-        value={pairlistMode}
-        onChange={(e) => setPairlistMode(e.target.value as PairlistMode)}
-      >
-        <option value="static">Manual list</option>
-        <option value="volume">Automatic — top by volume</option>
-      </select>
-
-      {pairlistMode === "static" ? (
-        <>
-          <label>Pairs (choose a coin — quoted in USDT)</label>
-          <select
-            value=""
-            onChange={(e) => {
-              addCoin(e.target.value);
-              e.target.value = "";
-            }}
-            disabled={availableCoins.length === 0}
-            className="mb-8"
-          >
-            <option value="" disabled>
-              {availableCoins.length === 0 ? "All coins added" : "Add a coin…"}
+      <fieldset className="form-section"><legend>Estrategia y timeframe</legend>
+        <label htmlFor="settingspage-field-1">Estrategia</label>
+        <select id="settingspage-field-1" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
+          {data.available_strategies.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
             </option>
-            {availableCoins.map((c) => (
-              <option key={c} value={c}>
-                {c}/USDT
-              </option>
-            ))}
-          </select>
-          <div className="row">
-            {pairs.length === 0 && <span className="muted">No pairs added yet.</span>}
-            {pairs.map((p) => (
-              <span key={p} className="chip">
-                {p}
-                <button type="button" aria-label={`Remove ${p}`} onClick={() => removePair(p)}>
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-        </>
-      ) : (
-        <>
-          <label>Top N pairs by 24h volume</label>
-          <input
-            type="number"
-            min={1}
-            max={100}
-            value={volumeN}
-            onChange={(e) => setVolumeN(e.target.value)}
-          />
-          <p className="muted">
-            The bot auto-selects the {volumeN || "N"} highest-volume USDT pairs and refreshes
-            the list periodically.
-          </p>
-        </>
-      )}
+          ))}
+        </select>
+        {(() => {
+          const selected = data.available_strategies.find((s) => s.key === strategy);
+          return selected ? <p className="muted">{selected.description}</p> : null;
+        })()}
 
-      <div className="form-grid">
         <div className="field">
-          <label>Stake currency</label>
-          <input value="USDT" disabled />
-        </div>
-        <div className="field">
-          <label>
-            {isLive
-              ? `Stake amount (${data.live_min_stake}–${data.live_max_capital} per trade)`
-              : 'Stake amount ("unlimited" or number)'}
-          </label>
-          <input value={stakeAmount} onChange={(e) => setStakeAmount(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Max open trades</label>
-          <input
-            type="number"
-            value={maxOpen}
-            onChange={(e) => setMaxOpen(e.target.value)}
-            min={1}
-            max={50}
-          />
-        </div>
-      </div>
-
-      <div className="form-grid">
-        <div className="field">
-          <label>Stoploss (e.g. -0.10)</label>
-          <input type="number" step="0.01" value={stoploss} onChange={(e) => setStoploss(e.target.value)} />
-        </div>
-        <div className="field">
-          <label>Timeframe</label>
-          <select value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
+          <label htmlFor="settingspage-field-2">Timeframe</label>
+          <select id="settingspage-field-2" value={timeframe} onChange={(e) => setTimeframe(e.target.value)}>
             {data.available_timeframes.map((t) => (
               <option key={t} value={t}>
                 {t}
@@ -259,105 +174,205 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
             ))}
           </select>
         </div>
-        <div className="field">
-          <label>Dry-run wallet</label>
-          <input
-            type="number"
-            step="1"
-            min={0}
-            value={dryRunWallet}
-            onChange={(e) => setDryRunWallet(e.target.value)}
-            disabled={isLive}
-          />
-          {isLive && <p className="muted">Ignored in live — the exchange reports your real balance.</p>}
-        </div>
-      </div>
-      {isLive && exposure !== null && (
-        <p className={overCap ? "error" : "muted"}>
-          Total exposure: {exposure} {data.stake_currency} ({stakeAmount} x {maxOpen} trades) —
-          limit {data.live_max_capital}.
-        </p>
-      )}
+      </fieldset>
+      <fieldset className="form-section"><legend>Pares de trading</legend>
+        <label htmlFor="settingspage-field-3">Selección de pares</label>
+        <select id="settingspage-field-3"
+          value={pairlistMode}
+          onChange={(e) => setPairlistMode(e.target.value as PairlistMode)}
+        >
+          <option value="static">Lista manual</option>
+          <option value="volume">Automática · mayor volumen</option>
+        </select>
 
-      <label className="mt-12">Take-profit ROI table</label>
-      <p className="muted">
-        Take {`{ROI}`} profit after {`{minutes}`} minutes. The step at 0 minutes is the
-        initial target; later steps lower the bar over time.
-      </p>
-      {roiTable.map((step, i) => (
-        <div className="row roi-row" key={i}>
-          <div className="field">
-            <input
+        {pairlistMode === "static" ? (
+          <>
+            <label htmlFor="settingspage-field-4">Pares (elige una moneda · cotización USDT)</label>
+            <select id="settingspage-field-4"
+              value=""
+              onChange={(e) => {
+                addCoin(e.target.value);
+                e.target.value = "";
+              }}
+              disabled={availableCoins.length === 0}
+              className="mb-8"
+            >
+              <option value="" disabled>
+                {availableCoins.length === 0 ? "Todas las monedas añadidas" : "Añadir moneda…"}
+              </option>
+              {availableCoins.map((c) => (
+                <option key={c} value={c}>
+                  {c}/USDT
+                </option>
+              ))}
+            </select>
+            <div className="row">
+              {pairs.length === 0 && <span className="muted">Todavía no has añadido pares.</span>}
+              {pairs.map((p) => (
+                <span key={p} className="chip">
+                  {p}
+                  <button type="button" aria-label={`Quitar ${p}`} onClick={() => removePair(p)}>
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
+            <label htmlFor="settingspage-field-5">Cantidad de pares por volumen de 24 h</label>
+            <input id="settingspage-field-5"
               type="number"
-              min={0}
+              min={1}
+              max={100}
+              value={volumeN}
+              onChange={(e) => setVolumeN(e.target.value)}
+            />
+            <p className="muted">
+              El bot selecciona los {volumeN || "N"} pares USDT con mayor volumen y actualiza
+              la lista periódicamente.
+            </p>
+          </>
+        )}
+
+      </fieldset>
+      <fieldset className="form-section"><legend>Capital y exposición</legend>
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="settingspage-field-6">Moneda de inversión</label>
+            <input id="settingspage-field-6" value="USDT" disabled />
+          </div>
+          <div className="field">
+            <label htmlFor="settingspage-field-7">
+              {isLive
+                ? `Importe por operación (${data.live_min_stake}–${data.live_max_capital})`
+                : 'Importe por operación ("unlimited" o número)'}
+            </label>
+            <input id="settingspage-field-7" value={stakeAmount} onChange={(e) => setStakeAmount(e.target.value)} />
+          </div>
+          <div className="field">
+            <label htmlFor="settingspage-field-8">Máximo de operaciones abiertas</label>
+            <input id="settingspage-field-8"
+              type="number"
+              value={maxOpen}
+              onChange={(e) => setMaxOpen(e.target.value)}
+              min={1}
+              max={50}
+            />
+          </div>
+        </div>
+
+        <div className="form-grid">
+          <div className="field">
+            <label htmlFor="settingspage-field-9">Capital de simulación</label>
+            <input id="settingspage-field-9"
+              type="number"
               step="1"
-              value={String(step.minutes)}
-              onChange={(e) => setRoiStep(i, { minutes: Number(e.target.value) })}
-              placeholder="minutes"
+              min={0}
+              value={dryRunWallet}
+              onChange={(e) => setDryRunWallet(e.target.value)}
+              disabled={isLive}
             />
-          </div>
-          <div className="field">
-            <input
-              type="number"
-              step="0.01"
-              value={String(step.roi)}
-              onChange={(e) => setRoiStep(i, { roi: Number(e.target.value) })}
-              placeholder="roi (e.g. 0.10)"
-            />
-          </div>
-          <button
-            type="button"
-            onClick={() => removeRoiStep(i)}
-            disabled={roiTable.length <= 1}
-          >
-            Remove
-          </button>
-        </div>
-      ))}
-      <button type="button" onClick={addRoiStep}>
-        Add ROI step
-      </button>
-
-      <label className="checkbox-label mt-12">
-        <input
-          type="checkbox"
-          checked={trailingStop}
-          onChange={(e) => setTrailingStop(e.target.checked)}
-          className="checkbox-input"
-        />
-        Enable trailing stop
-      </label>
-      {trailingStop && (
-        <div className="form-grid form-grid--two">
-          <div className="field">
-            <label>Trailing positive (optional, e.g. 0.01)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={trailingPos}
-              onChange={(e) => setTrailingPos(e.target.value)}
-              placeholder="leave empty to trail from stoploss"
-            />
-          </div>
-          <div className="field">
-            <label>Trailing offset (must exceed positive)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={trailingOffset}
-              onChange={(e) => setTrailingOffset(e.target.value)}
-            />
+            {isLive && <p className="muted">No se usa en modo real: el exchange informa tu balance.</p>}
           </div>
         </div>
-      )}
+        {isLive && exposure !== null && (
+          <p className={overCap ? "error" : "muted"}>
+            Exposición total: {exposure} {data.stake_currency} ({stakeAmount} x {maxOpen} operaciones) —
+            límite {data.live_max_capital}.
+          </p>
+        )}
 
+      </fieldset>
+      <fieldset className="form-section"><legend>Riesgo y objetivos</legend>
+        <div className="field">
+          <label htmlFor="settingspage-field-10">Stoploss (p. ej. -0.10)</label>
+          <input id="settingspage-field-10" type="number" step="0.01" value={stoploss} onChange={(e) => setStoploss(e.target.value)} />
+        </div>
+        <h3 className="subhead">Objetivos de beneficio (ROI)</h3>
+        <p className="muted">
+          Objetivo de beneficio {`{ROI}`} tras {`{minutos}`} minutos. El escalón de 0 minutos es
+          el objetivo inicial; los siguientes lo ajustan con el tiempo.
+        </p>
+        {roiTable.map((step, i) => (
+          <div className="row roi-row" key={i}>
+            <div className="field">
+              <input
+                type="number"
+                min={0}
+                step="1"
+                value={String(step.minutes)}
+                onChange={(e) => setRoiStep(i, { minutes: Number(e.target.value) })}
+                placeholder="minutos"
+                aria-label={`Minutos del escalón ${i + 1}`}
+              />
+            </div>
+            <div className="field">
+              <input
+                type="number"
+                step="0.01"
+                value={String(step.roi)}
+                onChange={(e) => setRoiStep(i, { roi: Number(e.target.value) })}
+                placeholder="ROI (p. ej. 0.10)"
+                aria-label={`ROI del escalón ${i + 1}`}
+              />
+            </div>
+            <button
+              className="secondary"
+              type="button"
+              onClick={() => removeRoiStep(i)}
+              disabled={roiTable.length <= 1}
+              aria-label={`Quitar escalón ${i + 1}`}
+            >
+              Quitar
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={addRoiStep}>
+          Añadir escalón ROI
+        </button>
+
+        <label className="checkbox-label mt-12">
+          <input
+            type="checkbox"
+            checked={trailingStop}
+            onChange={(e) => setTrailingStop(e.target.checked)}
+            className="checkbox-input"
+          />
+          Activar trailing stop
+        </label>
+        {trailingStop && (
+          <div className="form-grid form-grid--two">
+            <div className="field">
+              <label htmlFor="settingspage-field-11">Trailing positivo (opcional, p. ej. 0.01)</label>
+              <input id="settingspage-field-11"
+                type="number"
+                step="0.01"
+                value={trailingPos}
+                onChange={(e) => setTrailingPos(e.target.value)}
+                placeholder="Vacío para usar el stoploss"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="settingspage-field-12">Offset del trailing (mayor que el positivo)</label>
+              <input id="settingspage-field-12"
+                type="number"
+                step="0.01"
+                value={trailingOffset}
+                onChange={(e) => setTrailingOffset(e.target.value)}
+              />
+            </div>
+          </div>
+        )}
+
+      </fieldset>
       <div className="mt-16">
         <button className={isLive ? "danger" : undefined} onClick={onSave} disabled={save.isPending}>
-          {save.isPending ? "Saving & restarting…" : "Save settings"}
+          {save.isPending ? "Guardando y reiniciando…" : "Guardar ajustes"}
         </button>
       </div>
       {error && <div className="error">{error}</div>}
-      {saved && !error && <p className="muted">Saved. Bot restarted with the new settings.</p>}
+      {saved && !error && <p className="muted">Ajustes guardados. El bot se reinició con la nueva configuración.</p>}
     </div>
   );
 }

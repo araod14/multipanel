@@ -9,7 +9,7 @@ export default function TechnicalPanel({ technical }: TechnicalPanelProps) {
     return (
       <div>
         <div className="technical-header">
-          <h3>Val. técnica (TradingView)</h3>
+          <h3>Análisis de mercado</h3>
           <div className="subtitle">Sin datos disponibles</div>
         </div>
         <div className="technical-empty">
@@ -36,12 +36,12 @@ export default function TechnicalPanel({ technical }: TechnicalPanelProps) {
   return (
     <div>
       <div className="technical-header">
-        <h3>Val. técnica (TradingView)</h3>
+        <h3>Análisis de mercado</h3>
         <div className="subtitle">
           <span>{sorted.length} pares en análisis</span>
           {counts.strongBuy > 0 && (
-            <span className="badge" style={{ background: "rgba(50, 213, 131, .2)", color: "#20d580" }}>
-              {counts.strongBuy} fuerte
+            <span className="badge running">
+              {counts.strongBuy} compra fuerte
             </span>
           )}
         </div>
@@ -61,13 +61,14 @@ export default function TechnicalPanel({ technical }: TechnicalPanelProps) {
                   {item.label}
                 </span>
               )}
+              {!item.label && <span className="muted">Sin valoración</span>}
             </div>
           );
         })}
       </div>
 
       <div className="technical-credit">
-        📊 Fuente: TradingView
+        Fuente: TradingView
         <br />
         <em>Fines informativos, no es consejo</em>
       </div>

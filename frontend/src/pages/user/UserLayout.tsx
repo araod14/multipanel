@@ -1,14 +1,15 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 
 import { useAuth } from "../../auth/AuthContext";
+import { BrandMark } from "../../components/BrandMark";
 import { NavIcon } from "../../components/NavIcon";
 
 const links = [
-  { to: "/app", end: true, label: "Dashboard", short: "Inicio", icon: "dashboard" as const },
-  { to: "/app/trades", label: "Trades", short: "Trades", icon: "trades" as const },
-  { to: "/app/history", label: "Historial", short: "Historial", icon: "history" as const },
-  { to: "/app/controls", label: "Controls", short: "Control", icon: "controls" as const },
-  { to: "/app/settings", label: "Settings", short: "Ajustes", icon: "settings" as const },
+  { to: "/app", end: true, label: "Resumen", icon: "dashboard" as const },
+  { to: "/app/trades", label: "Operaciones", icon: "trades" as const },
+  { to: "/app/history", label: "Historial", icon: "history" as const },
+  { to: "/app/controls", label: "Control", icon: "controls" as const },
+  { to: "/app/settings", label: "Ajustes", icon: "settings" as const },
 ];
 
 export function UserLayout() {
@@ -16,23 +17,23 @@ export function UserLayout() {
   return (
     <div className="layout user-layout">
       <header className="mobile-header">
-        <div className="brand-mark">FT</div>
-        <div><strong>My Bot</strong><span>Control Plane</span></div>
+        <BrandMark />
+        <div><strong>Control Plane</strong><span>Mi bot</span></div>
+        <Link className="mobile-results" to="/results" aria-label="Ver resultados de todas las cuentas"><NavIcon name="trades" /></Link>
         <button className="icon-button" onClick={logout} aria-label="Cerrar sesión"><NavIcon name="logout" /></button>
       </header>
-      <nav className="sidebar">
-        <div className="brand"><div className="brand-mark">FT</div><div><strong>My Bot</strong><span>Control Plane</span></div></div>
+      <nav className="sidebar" aria-label="Navegación principal">
+        <Link to="/app" className="brand"><BrandMark /><div><strong>Control Plane</strong><span>Mi bot</span></div></Link>
         <div className="nav-group">
           {links.map((link) => <NavLink key={link.to} to={link.to} end={link.end}><NavIcon name={link.icon} /><span>{link.label}</span></NavLink>)}
         </div>
+        <div className="nav-group sidebar-results"><NavLink to="/results"><NavIcon name="trades" /><span>Resultados globales</span></NavLink></div>
         <div className="spacer" />
-        <button className="secondary logout-button" onClick={logout}><NavIcon name="logout" />Log out</button>
+        <button className="secondary logout-button" onClick={logout}><NavIcon name="logout" />Cerrar sesión</button>
       </nav>
-      <main className="content">
-        <Outlet />
-      </main>
-      <nav className="bottom-nav" aria-label="Navegación principal">
-        {links.map((link) => <NavLink key={link.to} to={link.to} end={link.end}><NavIcon name={link.icon} /><span>{link.short}</span></NavLink>)}
+      <main className="content" id="main-content" tabIndex={-1}><Outlet /></main>
+      <nav className="bottom-nav" aria-label="Navegación móvil">
+        {links.map((link) => <NavLink key={link.to} to={link.to} end={link.end}><NavIcon name={link.icon} /><span>{link.label}</span></NavLink>)}
       </nav>
     </div>
   );

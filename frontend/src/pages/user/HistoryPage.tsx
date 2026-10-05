@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { useQuery } from "@tanstack/react-query";
 
 import { userApi } from "../../api/user";
@@ -19,66 +20,69 @@ export function HistoryPage() {
   const losses = trades.filter((t) => (t.profit_abs ?? 0) < 0).length;
 
   return (
-    <div className="card">
-      <div className="row space-between">
-        <h2 className="mb-8">Historial de trades</h2>
-        {!history.isError && trades.length > 0 && (
-          <span className="muted">
-            {total} cerrados · <span style={{ color: "var(--green)" }}>{wins} ganados</span> ·{" "}
-            <span style={{ color: "var(--red)" }}>{losses} perdidos</span>
-          </span>
+    <>
+      <PageHeading title="Historial" description="Revisa tus operaciones cerradas y sus resultados." />
+      <div className="card">
+        <div className="row space-between">
+          <h2 className="mb-8">Operaciones cerradas</h2>
+          {!history.isError && trades.length > 0 && (
+            <span className="muted">
+              {total} cerrados · <span style={{ color: "var(--green)" }}>{wins} ganados</span> ·{" "}
+              <span style={{ color: "var(--red)" }}>{losses} perdidos</span>
+            </span>
+          )}
+        </div>
+
+        {history.isLoading ? (
+          <p className="muted">Cargando…</p>
+        ) : history.isError ? (
+          <p className="muted">No disponible (el bot está iniciando o detenido).</p>
+        ) : trades.length === 0 ? (
+          <p className="muted">Aún no hay operaciones cerradas.</p>
+        ) : (
+          <table className="responsive-table">
+            <thead>
+              <tr>
+                <th>Par</th>
+                <th>Lado</th>
+                <th>Entrada</th>
+                <th>Salida</th>
+                <th>Cierre</th>
+                <th>ROI</th>
+                <th>Beneficio</th>
+                <th>Motivo</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trades.map((t) => {
+                const abs = t.profit_abs ?? 0;
+                const cls = abs > 0 ? "win" : abs < 0 ? "loss" : "";
+                return (
+                  <tr key={t.trade_id} className={cls}>
+                    <td data-label="Par" className="table-primary">{t.pair}</td>
+                    <td data-label="Lado">
+                      <span className={`badge ${t.is_short ? "live" : "dry"}`}>
+                        {t.is_short ? "short" : "long"}
+                      </span>
+                    </td>
+                    <td data-label="Entrada" className="num">{price(t.open_rate)}</td>
+                    <td data-label="Salida" className="num">{price(t.close_rate)}</td>
+                    <td data-label="Cierre" className="muted">{shortDate(t.close_date)}</td>
+                    <td data-label="ROI">
+                      <ProfitCell
+                        pct={typeof t.profit_ratio === "number" ? t.profit_ratio * 100 : null}
+                      />
+                    </td>
+                    <td data-label="Beneficio" className={`amt ${abs >= 0 ? "pos" : "neg"}`}>{signed(abs)}</td>
+                    <td data-label="Motivo" className="muted">{t.exit_reason ?? "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         )}
       </div>
-
-      {history.isLoading ? (
-        <p className="muted">Cargando…</p>
-      ) : history.isError ? (
-        <p className="muted">No disponible (el bot está iniciando o detenido).</p>
-      ) : trades.length === 0 ? (
-        <p className="muted">Aún no hay trades cerrados.</p>
-      ) : (
-        <table className="responsive-table">
-          <thead>
-            <tr>
-              <th>Par</th>
-              <th>Lado</th>
-              <th>Entrada</th>
-              <th>Salida</th>
-              <th>Cierre</th>
-              <th>Profit %</th>
-              <th>Profit</th>
-              <th>Motivo</th>
-            </tr>
-          </thead>
-          <tbody>
-            {trades.map((t) => {
-              const abs = t.profit_abs ?? 0;
-              const cls = abs > 0 ? "win" : abs < 0 ? "loss" : "";
-              return (
-                <tr key={t.trade_id} className={cls}>
-                  <td data-label="Par" className="table-primary">{t.pair}</td>
-                  <td data-label="Lado">
-                    <span className={`badge ${t.is_short ? "live" : "dry"}`}>
-                      {t.is_short ? "short" : "long"}
-                    </span>
-                  </td>
-                  <td data-label="Entrada" className="num">{price(t.open_rate)}</td>
-                  <td data-label="Salida" className="num">{price(t.close_rate)}</td>
-                  <td data-label="Cierre" className="muted">{shortDate(t.close_date)}</td>
-                  <td data-label="Profit %">
-                    <ProfitCell
-                      pct={typeof t.profit_ratio === "number" ? t.profit_ratio * 100 : null}
-                    />
-                  </td>
-                  <td data-label="Profit" className={`amt ${abs >= 0 ? "pos" : "neg"}`}>{signed(abs)}</td>
-                  <td data-label="Motivo" className="muted">{t.exit_reason ?? "—"}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      )}
-    </div>
+    </>
   );
 }
 

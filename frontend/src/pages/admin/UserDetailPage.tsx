@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
@@ -42,7 +43,7 @@ export function UserDetailPage() {
       refresh();
     },
     onError: (e: AxiosError<{ detail: string }>) =>
-      setModeError(e.response?.data?.detail ?? "Could not change mode"),
+      setModeError(e.response?.data?.detail ?? "No se pudo cambiar el modo"),
   });
 
   const hasBot = bot.isSuccess;
@@ -50,65 +51,70 @@ export function UserDetailPage() {
     provision.isPending || start.isPending || stop.isPending || rotate.isPending || setMode.isPending;
 
   const goLive = () => {
-    const exchangeName = exchange.data?.exchange_name ?? "the exchange";
+    const exchangeName = exchange.data?.exchange_name ?? "el exchange";
     const cap = bot.data?.live_max_capital;
     const message =
-      `Enable LIVE trading with REAL money?\n\n` +
-      `The bot will be recreated and will place real orders on ${exchangeName}.\n` +
-      `Total exposure is capped at ${cap} ${bot.data?.stake_currency}; the server refuses ` +
-      `settings that would risk more.\n\n` +
-      `This cannot be undone for orders already filled.`;
+      `¿Activar el trading con dinero REAL?\n\n` +
+      `El bot se recreará y enviará órdenes reales a ${exchangeName}.\n` +
+      `La exposición máxima es ${cap} ${bot.data?.stake_currency}; el servidor rechaza ` +
+      `ajustes que superen ese límite.\n\n` +
+      `Las órdenes ya ejecutadas no se pueden deshacer.`;
     if (confirm(message)) setMode.mutate(false);
   };
 
   return (
     <>
+      <PageHeading title="Gestión de cuenta" description="Estado del bot, modo de operación y credenciales." />
       <button className="secondary mb-16" onClick={() => navigate("/admin")}>
-        ← Back
+        ← Volver
       </button>
 
       <div className="card">
-        <h2>Bot — user #{id}</h2>
+        <h2>Bot de la cuenta</h2>
         {hasBot ? (
           <>
             <div className="row mb-12">
               <StatusBadge status={bot.data.status} />
               <ModeBadge dryRun={bot.data.dry_run} />
-              <span className="muted">{bot.data.container_name}</span>
+              <span className="muted">Cuenta #{id}</span>
             </div>
             <div className="action-row">
               <button onClick={() => start.mutate()} disabled={busy}>
-                Start
+                Iniciar
               </button>
               <button className="secondary" onClick={() => stop.mutate()} disabled={busy}>
-                Stop
+                Detener
               </button>
               <button className="secondary" onClick={() => provision.mutate()} disabled={busy}>
-                Re-provision
+                Recrear bot
               </button>
               <button className="secondary" onClick={() => rotate.mutate()} disabled={busy}>
-                Rotate credentials
+                Renovar credenciales
               </button>
             </div>
-            <div className="action-row mt-14">
+            <div className="action-row danger-zone">
               {bot.data.dry_run ? (
                 <button className="danger" onClick={goLive} disabled={busy}>
-                  Go LIVE
+                  Activar modo real
                 </button>
               ) : (
                 <button className="secondary" onClick={() => setMode.mutate(true)} disabled={busy}>
-                  Back to dry-run
+                  Volver a simulación
                 </button>
               )}
             </div>
             {modeError && <div className="error">{modeError}</div>}
+            {(start.isError || stop.isError || provision.isError || rotate.isError) && <p className="error" role="alert">No se pudo completar la acción del bot.</p>}
           </>
+        ) : bot.isLoading ? (
+          <p className="muted" role="status">Cargando bot…</p>
         ) : (
           <>
-            <p className="muted">No bot provisioned yet.</p>
+            <p className="muted">Todavía no hay un bot aprovisionado.</p>
             <button onClick={() => provision.mutate()} disabled={provision.isPending}>
-              Provision bot
+              Crear bot
             </button>
+            {provision.isError && <p className="error" role="alert">No se pudo crear el bot.</p>}
           </>
         )}
       </div>
@@ -156,10 +162,10 @@ function ExchangeCard({
       onChanged();
     },
     onError: (e: AxiosError<{ detail: string }>) => {
-      const detail = e.response?.data?.detail ?? "Could not save credentials";
+      const detail = e.response?.data?.detail ?? "No se pudieron guardar las credenciales";
       // 503 means we could not reach the exchange, which says nothing about the key —
       // offer to store it unverified. A 422 is the exchange itself saying no: never offer.
-      if (e.response?.status === 503 && confirm(`${detail}\n\nStore it without verifying?`)) {
+      if (e.response?.status === 503 && confirm(`${detail}\n\n¿Guardar sin verificar?`)) {
         save.mutate(true);
         return;
       }
@@ -176,29 +182,28 @@ function ExchangeCard({
 
   return (
     <div className="card">
-      <h2>Exchange credentials</h2>
+      <h2>Credenciales del exchange</h2>
       {loading ? (
-        <p className="muted">Loading…</p>
+        <p className="muted">Cargando…</p>
       ) : meta ? (
         <p className="muted">
-          {meta.exchange_name} — key {meta.key_masked} (updated{" "}
+          {meta.exchange_name} — clave {meta.key_masked} (actualizadas{" "}
           {new Date(meta.updated_at).toLocaleString()})
         </p>
       ) : (
-        <p className="muted">No credentials set. The bot can only run in dry-run.</p>
+        <p className="muted">No hay credenciales. El bot solo puede operar en simulación.</p>
       )}
 
       {probed && (
         <>
           <p className="muted">
             {probed.verified
-              ? `Verified — ${probed.balance ?? 0} USDT available on the exchange.`
-              : "Stored without verification."}
+              ? `Verificadas — ${probed.balance ?? 0} USDT disponibles en el exchange.`
+              : "Guardadas sin verificar."}
           </p>
           {probed.can_withdraw && (
             <div className="error">
-              This API key has withdrawals enabled. A trading bot never needs that — consider
-              re-creating it with Spot Trading only.
+              Esta clave API permite retiros. Crea una clave con permisos solo para trading spot.
             </div>
           )}
         </>
@@ -206,8 +211,8 @@ function ExchangeCard({
 
       <div className="form-grid exchange-form">
         <div className="field">
-          <label>Exchange</label>
-          <select value={selected} onChange={(e) => setExchangeName(e.target.value)}>
+          <label htmlFor="userdetailpage-field-1">Exchange</label>
+          <select id="userdetailpage-field-1" value={selected} onChange={(e) => setExchangeName(e.target.value)}>
             {(exchanges.data?.supported ?? []).map((name) => (
               <option key={name} value={name}>
                 {name}
@@ -216,41 +221,42 @@ function ExchangeCard({
           </select>
         </div>
         <div className="field">
-          <label>API key</label>
-          <input value={key} onChange={(e) => setKey(e.target.value)} />
+          <label htmlFor="userdetailpage-field-2">Clave API</label>
+          <input id="userdetailpage-field-2" value={key} onChange={(e) => setKey(e.target.value)} />
         </div>
         <div className="field">
-          <label>API secret</label>
-          <input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} />
+          <label htmlFor="userdetailpage-field-3">Secreto API</label>
+          <input id="userdetailpage-field-3" type="password" value={secret} onChange={(e) => setSecret(e.target.value)} />
         </div>
         <div className="field-action mt-12">
           <button
             onClick={() => save.mutate(false)}
             disabled={!key || !secret || !selected || save.isPending}
           >
-            {save.isPending ? "Verifying…" : "Save & inject"}
+            {save.isPending ? "Verificando…" : "Guardar y aplicar"}
           </button>
         </div>
       </div>
       <p className="muted">
-        Use an HMAC-SHA256 key with Spot Trading enabled and withdrawals disabled. The key is
-        verified against the exchange before it is stored.
+        Usa una clave HMAC-SHA256 con trading spot activado y retiros desactivados.
+        La clave se verifica con el exchange antes de guardarla.
       </p>
       {saveError && <div className="error">{saveError}</div>}
+      {remove.isError && <p className="error" role="alert">No se pudieron eliminar las credenciales.</p>}
       {meta && (
         <button
           className="danger mt-12 mobile-full-button"
           onClick={() => {
             if (
               confirm(
-                "Delete exchange credentials?\n\nThe bot will be forced back to dry-run and " +
-                  "restarted immediately. Any open live positions are left on the exchange.",
+                "¿Eliminar las credenciales del exchange?\n\nEl bot volverá a simulación y " +
+                "se reiniciará inmediatamente. Las posiciones reales abiertas permanecerán en el exchange.",
               )
             )
               remove.mutate();
           }}
         >
-          Delete credentials
+          Eliminar credenciales
         </button>
       )}
     </div>
