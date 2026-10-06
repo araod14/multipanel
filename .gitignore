@@ -18,6 +18,9 @@ deploy/backups/
 frontend/dist/
 *.log
 
+# LinkedIn assets (screenshots + post draft)
+linkedin/
+
 # Tooling / editors
 .playwright-mcp/
 .vscode/
