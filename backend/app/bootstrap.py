@@ -23,7 +23,14 @@ logger = logging.getLogger("control_plane.bootstrap")
 # ONLY nullable/defaulted ADD COLUMN belongs here; anything else needs a real
 # migration tool.
 _ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
-    "bot_instances": {"trading_enabled": "BOOLEAN NOT NULL DEFAULT 0"},
+    "bot_instances": {
+        "trading_enabled": "BOOLEAN NOT NULL DEFAULT 0",
+        "tradingview_paused": "BOOLEAN NOT NULL DEFAULT 0",
+        "manual_paused": "BOOLEAN NOT NULL DEFAULT 0",
+        "entry_pause_managed": "BOOLEAN NOT NULL DEFAULT 0",
+        "entry_pause_pending": "BOOLEAN NOT NULL DEFAULT 0",
+        "tradingview_evaluation": "JSON",
+    },
 }
 
 

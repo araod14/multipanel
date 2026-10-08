@@ -126,6 +126,12 @@ def _config_block(instance: BotInstance) -> dict[str, Any]:
     cfg = bot_config.effective(instance.user_config_json)
     spec = strategy_assets.get_spec(cfg["strategy"])
     return {
+        "tradingview_guard_enabled": instance.tradingview_guard_enabled,
+        "tradingview_paused": instance.tradingview_paused,
+        "manual_paused": instance.manual_paused,
+        "entry_pause_managed": instance.entry_pause_managed,
+        "entry_pause_pending": instance.entry_pause_pending,
+        "tradingview_evaluation": instance.tradingview_evaluation,
         "strategy_key": cfg["strategy"],
         "strategy_label": spec.label,
         "pairlist_mode": cfg["pairlist_mode"],

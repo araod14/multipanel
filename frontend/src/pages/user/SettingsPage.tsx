@@ -22,6 +22,7 @@ export function SettingsPage() {
 }
 
 function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void }) {
+  const [guardEnabled, setGuardEnabled] = useState(data.tradingview_guard_enabled);
   const [strategy, setStrategy] = useState(data.strategy);
   const [pairlistMode, setPairlistMode] = useState<PairlistMode>(data.pairlist_mode);
   const [pairs, setPairs] = useState<string[]>(data.pairs);
@@ -42,6 +43,7 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
 
   // Keep the form in sync if the server data changes after a save.
   useEffect(() => {
+    setGuardEnabled(data.tradingview_guard_enabled);
     setStrategy(data.strategy);
     setPairlistMode(data.pairlist_mode);
     setPairs(data.pairs);
@@ -84,25 +86,28 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
     setRoiTable(roiTable.filter((_, idx) => idx !== i));
   }
 
+  function settingsPayload(): BotConfigInput {
+    const body: BotConfigInput = {
+      tradingview_guard_enabled: guardEnabled,
+      strategy,
+      pairlist_mode: pairlistMode,
+      max_open_trades: Number(maxOpen),
+      stake_amount: stakeAmount === "unlimited" ? "unlimited" : Number(stakeAmount),
+      stoploss: Number(stoploss),
+      roi_table: roiTable.map((s) => ({ minutes: Number(s.minutes), roi: Number(s.roi) })),
+      timeframe,
+      trailing_stop: trailingStop,
+      trailing_stop_positive: trailingPos === "" ? null : Number(trailingPos),
+      trailing_stop_positive_offset: Number(trailingOffset),
+      dry_run_wallet: Number(dryRunWallet),
+    };
+    if (pairlistMode === "volume") body.volume_number_assets = Number(volumeN);
+    else body.pairs = pairs;
+    return body;
+  }
+
   const save = useMutation({
-    mutationFn: () => {
-      const body: BotConfigInput = {
-        strategy,
-        pairlist_mode: pairlistMode,
-        max_open_trades: Number(maxOpen),
-        stake_amount: stakeAmount === "unlimited" ? "unlimited" : Number(stakeAmount),
-        stoploss: Number(stoploss),
-        roi_table: roiTable.map((s) => ({ minutes: Number(s.minutes), roi: Number(s.roi) })),
-        timeframe,
-        trailing_stop: trailingStop,
-        trailing_stop_positive: trailingPos === "" ? null : Number(trailingPos),
-        trailing_stop_positive_offset: Number(trailingOffset),
-        dry_run_wallet: Number(dryRunWallet),
-      };
-      if (pairlistMode === "volume") body.volume_number_assets = Number(volumeN);
-      else body.pairs = pairs;
-      return userApi.saveConfig(body);
-    },
+    mutationFn: () => userApi.saveConfig(settingsPayload()),
     onSuccess: () => {
       setError(null);
       setSaved(true);
@@ -122,8 +127,11 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
   const overCap = isLive && exposure !== null && exposure > data.live_max_capital;
 
   const onSave = () => {
+    const runtimeChanged = Object.entries(settingsPayload()).some(([key, value]) =>
+      key !== "tradingview_guard_enabled" && JSON.stringify(value) !== JSON.stringify(data[key as keyof BotConfig]),
+    );
     if (
-      isLive &&
+      isLive && runtimeChanged &&
       !confirm(
         `¿Guardar y reiniciar el bot con dinero REAL?\n\n` +
         `Exposición: ${exposure ?? "?"} ${data.stake_currency} ` +
@@ -142,14 +150,25 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
         <div className="row mb-8">
           <ModeBadge dryRun={false} />
           <span>
-            Este bot opera con dinero REAL. Guardar lo reinicia inmediatamente. La exposición máxima es {data.live_max_capital} {data.stake_currency}.
+            Este bot opera con dinero REAL. Cambiar la estrategia o sus parámetros lo reinicia. La exposición máxima es {data.live_max_capital} {data.stake_currency}.
           </span>
         </div>
       )}
       <p className="muted">
-        Al guardar se aplican los ajustes y se reinicia el bot. Todos los pares cotizan en USDT.
+        Cambiar parámetros de trading reinicia el bot. Todos los pares cotizan en USDT.
       </p>
 
+      <fieldset className="form-section"><legend>Protección TradingView</legend>
+        <label className="checkbox-label">
+          <input type="checkbox" className="checkbox-input" checked={guardEnabled}
+            onChange={(e) => setGuardEnabled(e.target.checked)} />
+          Protección TradingView: {guardEnabled ? "activa" : "inactiva"}
+        </label>
+        <p className="muted">Cada minuto se evalúa la lista activa en el exchange y timeframe del bot.
+          Si todos los pares están en venta, se pausan nuevas compras y se mantienen las salidas.
+          Las compras se reanudan cuando más de la mitad está en compra.
+          Sin datos completos se conserva el estado. Cambiar solo esta protección no reinicia el bot.</p>
+      </fieldset>
       <fieldset className="form-section"><legend>Estrategia y timeframe</legend>
         <label htmlFor="settingspage-field-1">Estrategia</label>
         <select id="settingspage-field-1" value={strategy} onChange={(e) => setStrategy(e.target.value)}>
@@ -368,11 +387,11 @@ function SettingsForm({ data, onSaved }: { data: BotConfig; onSaved: () => void 
       </fieldset>
       <div className="mt-16">
         <button className={isLive ? "danger" : undefined} onClick={onSave} disabled={save.isPending}>
-          {save.isPending ? "Guardando y reiniciando…" : "Guardar ajustes"}
+          {save.isPending ? "Guardando…" : "Guardar ajustes"}
         </button>
       </div>
       {error && <div className="error">{error}</div>}
-      {saved && !error && <p className="muted">Ajustes guardados. El bot se reinició con la nueva configuración.</p>}
+      {saved && !error && <p className="muted">Ajustes guardados.</p>}
     </div>
   );
 }

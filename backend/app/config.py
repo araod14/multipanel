@@ -59,7 +59,8 @@ class Settings(BaseSettings):
     # --- Trading-state reconciliation ---
     # Bot containers boot with ``initial_state: stopped``, so a host reboot leaves every
     # bot idle and silent. ``services/reconciler.py`` re-starts the ones whose owner had
-    # them trading. Seconds between passes; 0 disables the loop entirely.
+    # them trading, or restores their manual/TradingView entry pause.
+    # Also polls TradingView fresh on each pass. Seconds between passes; 0 disables both.
     trading_reconcile_interval: float = 60.0
 
     # --- Public results page (unauthenticated) ---

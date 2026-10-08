@@ -1,6 +1,6 @@
 """TradingView technical analysis ratings (scanner API, non-official)."""
 
-import asyncio
+import math
 import logging
 from typing import Optional
 
@@ -53,84 +53,57 @@ def label(value: Optional[float]) -> Optional[str]:
 
 async def ratings(
     pairs_by_timeframe: dict[str, set[str]],
+    *,
+    exchange: str | None = None,
 ) -> dict[tuple[str, str], Optional[float]]:
-    """Fetch TradingView technical ratings for pairs across timeframes.
+    """Fetch ratings in one batch, indexing each response by its actual column.
 
-    Args:
-        pairs_by_timeframe: {timeframe -> set of pairs in BASE/USDT format}
-
-    Returns:
-        {(pair, timeframe): rating_value or None}
-        Pairs with no rating (unknown symbol) are omitted.
+    ``exchange`` is an explicit per-bot market; the existing public panel can omit
+    it to retain its default-exchange reference. Unsupported symbols stay missing.
     """
-    if not pairs_by_timeframe:
-        return {}
-
-    settings = get_settings()
-    exchange = settings.default_exchange.upper()
-
-    # Build symbol list for each timeframe: EXCHANGE:BASEUSDT
-    symbols_by_column: dict[str, list[tuple[str, str]]] = {}
+    exchange = (exchange or get_settings().default_exchange).upper()
+    columns: list[str] = []
+    symbols: dict[str, list[tuple[str, str, int]]] = {}
     for timeframe, pairs in pairs_by_timeframe.items():
-        column = _TIMEFRAME_COLUMN_MAP.get(timeframe)
-        if column is None:
-            logger.debug(f"Timeframe {timeframe} not mapped; skipping.")
+        suffix = _TIMEFRAME_COLUMN_MAP.get(timeframe)
+        if suffix is None:
             continue
-        full_column = f"Recommend.All{column}"
-        if full_column not in symbols_by_column:
-            symbols_by_column[full_column] = []
-        for pair in pairs:
-            # pair is "BASE/USDT"; drop the quote.
-            base = pair.split("/")[0].upper()
-            symbol = f"{exchange}:{base}USDT"
-            symbols_by_column[full_column].append((symbol, pair, timeframe))
-
-    result: dict[tuple[str, str], Optional[float]] = {}
-
-    # Batch all symbols and columns into one POST.
-    tickers = []
-    symbol_to_info: dict[str, list[tuple[str, str]]] = {}  # symbol -> [(pair, timeframe), ...]
-    for col, pairs_info in symbols_by_column.items():
-        for symbol, pair, timeframe in pairs_info:
-            if symbol not in symbol_to_info:
-                tickers.append(symbol)
-                symbol_to_info[symbol] = []
-            symbol_to_info[symbol].append((pair, timeframe))
-
-    if not tickers:
+        column = f"Recommend.All{suffix}"
+        if column not in columns:
+            columns.append(column)
+        column_index = columns.index(column)
+        for pair in sorted(pairs):
+            symbol = f"{exchange}:{pair.replace('/', '').upper()}"
+            symbols.setdefault(symbol, []).append((pair, timeframe, column_index))
+    if not symbols:
         return {}
-
-    payload = {
-        "symbols": {"tickers": tickers},
-        "columns": list(symbols_by_column.keys()),
-    }
 
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_S) as client:
             resp = await client.post(
                 "https://scanner.tradingview.com/crypto/scan",
-                json=payload,
+                json={"symbols": {"tickers": list(symbols)}, "columns": columns},
             )
             resp.raise_for_status()
             data = resp.json()
-    except httpx.HTTPError as e:
-        logger.warning(f"TradingView scanner failed: {e}")
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.warning("TradingView scanner failed: %s", exc)
         return {}
 
-    # Parse response: {"data": [{"s": "BINANCE:BTCUSDT", "d": [0.22, ...]}, ...]}
-    try:
-        for row in data.get("data", []):
-            symbol = row.get("s")
-            values = row.get("d", [])
-            if not symbol or not values:
-                continue
-
-            # values[i] corresponds to symbols_by_column.keys()[i]
-            for (pair, timeframe), value in zip(
-                symbol_to_info.get(symbol, []), values
-            ):
-                result[(pair, timeframe)] = value if isinstance(value, (int, float)) else None
-    except (KeyError, IndexError, TypeError) as e:
-        logger.warning(f"TradingView response parse error: {e}")
-
+    result: dict[tuple[str, str], Optional[float]] = {}
+    if not isinstance(data, dict) or not isinstance(data.get("data"), list):
+        return result
+    for row in data["data"]:
+        if not isinstance(row, dict) or not isinstance(row.get("s"), str):
+            continue
+        values = row.get("d")
+        if not isinstance(values, list):
+            continue
+        for pair, timeframe, index in symbols.get(row["s"], []):
+            value = values[index] if index < len(values) else None
+            result[(pair, timeframe)] = (
+                float(value)
+                if type(value) in (int, float) and math.isfinite(value) and -1 <= value <= 1
+                else None
+            )
     return result

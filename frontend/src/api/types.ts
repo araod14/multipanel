@@ -11,7 +11,30 @@ export interface User {
   created_at: string;
 }
 
-export interface BotInstance {
+export interface TradingViewEvaluation {
+  checked_at: string;
+  timeframe: string;
+  exchange: string;
+  total: number;
+  buy: number;
+  sell: number;
+  neutral: number;
+  missing: number;
+  data_complete: boolean;
+  reason: string;
+}
+
+export interface TradingViewGuardState {
+  tradingview_guard_enabled: boolean;
+  tradingview_paused: boolean;
+  manual_paused: boolean;
+  entry_pause_managed: boolean;
+  entry_pause_pending: boolean;
+  trading_enabled: boolean;
+  tradingview_evaluation: TradingViewEvaluation | null;
+}
+
+export interface BotInstance extends TradingViewGuardState {
   id: number;
   user_id: number;
   container_name: string;
@@ -68,6 +91,7 @@ export interface RoiStep {
 export type PairlistMode = "static" | "volume";
 
 export interface BotConfig {
+  tradingview_guard_enabled: boolean;
   strategy: string;
   pairlist_mode: PairlistMode;
   pairs: string[];
@@ -95,6 +119,7 @@ export interface BotConfig {
 export type BotConfigInput = Partial<
   Pick<
     BotConfig,
+    | "tradingview_guard_enabled"
     | "strategy"
     | "pairlist_mode"
     | "pairs"
@@ -221,7 +246,7 @@ export interface PublicTechnical {
   label: string | null;
 }
 
-export interface PublicAccount {
+export interface PublicAccount extends TradingViewGuardState {
   username: string;
   reachable: boolean;
   container_state: string | null;

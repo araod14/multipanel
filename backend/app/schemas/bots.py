@@ -8,6 +8,19 @@ from app.config import get_settings
 from app.models.bot_instance import BotStatus
 
 
+class TradingViewEvaluation(BaseModel):
+    checked_at: datetime
+    timeframe: str
+    exchange: str
+    total: int
+    buy: int
+    sell: int
+    neutral: int
+    missing: int
+    data_complete: bool
+    reason: str
+
+
 class BotInstanceOut(BaseModel):
     """Bot instance representation (no secrets)."""
 
@@ -22,6 +35,12 @@ class BotInstanceOut(BaseModel):
     # Whether the owner wants this bot trading. ``status`` is the container; this is the
     # trading loop inside it, which the reconciler restores after a reboot.
     trading_enabled: bool
+    tradingview_guard_enabled: bool
+    tradingview_paused: bool
+    manual_paused: bool
+    entry_pause_managed: bool
+    entry_pause_pending: bool
+    tradingview_evaluation: TradingViewEvaluation | None
     stake_currency: str
     created_at: datetime
     last_seen_at: datetime | None

@@ -3,15 +3,18 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { userApi } from "../../api/user";
-import { ModeBadge } from "../../components/StatusBadge";
+import { ModeBadge, TradingViewGuardStatus } from "../../components/StatusBadge";
 
 export function ControlsPage() {
   const qc = useQueryClient();
   const [pair, setPair] = useState("");
 
   // Same query key refreshBot already invalidates, so the badge stays consistent.
-  const bot = useQuery({ queryKey: ["me-bot"], queryFn: userApi.myBot, retry: false });
+  const bot = useQuery({ queryKey: ["me-bot"], queryFn: userApi.myBot, retry: false, refetchInterval: 15000 });
   const isLive = bot.data?.dry_run === false;
+  const entriesPaused = bot.data?.manual_paused || (
+    bot.data?.tradingview_guard_enabled && bot.data.tradingview_paused
+  );
 
   const refreshBot = () => qc.invalidateQueries({ queryKey: ["me-bot"] });
   const start = useMutation({ mutationFn: () => userApi.start(), onSuccess: refreshBot });
@@ -63,6 +66,9 @@ export function ControlsPage() {
 
       <div className="card">
         <h2>Operación del bot</h2>
+        {bot.data && <div className="row mb-12"><TradingViewGuardStatus bot={bot.data} /></div>}
+        {bot.data?.tradingview_guard_enabled && bot.data.tradingview_paused &&
+          <p className="muted">Iniciar respetará la pausa de TradingView. Puedes desactivar la protección en Ajustes.</p>}
         <div className="row">
           <button onClick={() => start.mutate()} disabled={start.isPending || stop.isPending}>
             Iniciar
@@ -85,12 +91,13 @@ export function ControlsPage() {
           <div className="field-action">
             <button className={`mobile-full-button${isLive ? " danger" : ""}`}
               onClick={confirmForceEnter}
-              disabled={!pair || forceEnter.isPending}
+              disabled={!pair || forceEnter.isPending || entriesPaused}
             >
               Abrir operación
             </button>
           </div>
         </div>
+        {entriesPaused && <p className="muted">Las nuevas compras están pausadas.</p>}
         {forceEnter.isError && <div className="error">No se pudo abrir la operación.</div>}
       </div>
 

@@ -52,6 +52,13 @@ class BotInstance(Base):
     # the user asked for; ``services/reconciler.py`` makes reality match it again.
     # False by default: a new bot has not been started yet.
     trading_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Guard intent and ownership survive a worker/container restart. Ownership lets
+    # reconciliation retry a failed resume without lifting an unrelated manual pause.
+    tradingview_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    manual_paused: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    entry_pause_managed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    entry_pause_pending: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    tradingview_evaluation: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     stake_currency: Mapped[str] = mapped_column(String(16), default="USDT")
     db_path: Mapped[str] = mapped_column(String(255))
 
@@ -70,3 +77,7 @@ class BotInstance(Base):
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user: Mapped["User"] = relationship(back_populates="bot")
+
+    @property
+    def tradingview_guard_enabled(self) -> bool:
+        return (self.user_config_json or {}).get("tradingview_guard_enabled", True)

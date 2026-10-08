@@ -5,6 +5,9 @@ user can never address another user's instance. Only an allowlisted subset of th
 Freqtrade REST API is forwarded.
 """
 
+import asyncio
+from contextlib import nullcontext
+
 from fastapi import APIRouter, HTTPException, Request, Response, status
 
 from app.config import get_settings
@@ -12,7 +15,15 @@ from app.models.bot_instance import BotInstance
 from app.schemas.bot_config import BotConfigIn, BotConfigOut, StrategyOption
 from app.schemas.bots import BotInstanceOut
 from app.security.deps import CurrentUser, DbSession
-from app.services import bot_config, provisioning, proxy, strategy_assets
+from app.services import (
+    audit,
+    bot_config,
+    provisioning,
+    proxy,
+    public_stats,
+    strategy_assets,
+    trading_guard,
+)
 from app.services.bot_config import ConfigValidationError
 from app.services.proxy import ProxyError
 
@@ -55,14 +66,11 @@ _ALLOWED_PREFIX: set[tuple[str, str]] = {
 }
 
 
-# Forwarding these also records the user's intent on the BotInstance, so a container
-# that comes back idle (Freqtrade boots with ``initial_state: stopped``) can be resumed
-# by ``services/reconciler.py`` instead of sitting silently stopped. ``pause`` is
-# deliberately absent: it is meant to be temporary, and the reconciler ignores a paused
-# bot anyway.
+# Record manual intent only when the bot accepts the command.
 _TRADING_INTENT: dict[tuple[str, str], bool] = {
     ("POST", "start"): True,
     ("POST", "stop"): False,
+    ("POST", "pause"): True,
 }
 
 
@@ -110,25 +118,42 @@ def get_config(user: CurrentUser) -> BotConfigOut:
 
 
 @router.put("/bot/config", response_model=BotConfigOut)
-def update_config(body: BotConfigIn, user: CurrentUser, db: DbSession) -> BotConfigOut:
-    """Update the caller's editable settings and re-provision their bot.
+async def update_config(body: BotConfigIn, user: CurrentUser, db: DbSession) -> BotConfigOut:
+    """Update settings; recreate the container only for changed trading parameters.
 
     Settings are merged over the current ones, validated, persisted, and the bot
-    container is recreated so the new config and strategy take effect.
+    container is recreated so new trading parameters take effect. Guard-only
+    changes are applied without recreating the container.
     """
     instance = _bot_or_404(user)
-    current = bot_config.effective(instance.user_config_json)
-    merged = {**current, **body.to_payload()}
-    try:
-        validated = bot_config.validate(merged, dry_run=instance.dry_run)
-    except ConfigValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-
-    instance.user_config_json = validated  # reassign so SQLAlchemy tracks the change
-    provisioning.provision_bot(db, user)
-    db.commit()
-    db.refresh(instance)
-    return _config_out(instance)
+    async with trading_guard.bot_lock(instance.id):
+        db.refresh(instance)
+        current = bot_config.effective(instance.user_config_json)
+        merged = {**current, **body.to_payload()}
+        try:
+            validated = bot_config.validate(merged, dry_run=instance.dry_run)
+        except ConfigValidationError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        runtime_changed = any(
+            current[k] != validated[k] for k in validated if k != "tradingview_guard_enabled"
+        )
+        instance.user_config_json = validated
+        if current["tradingview_guard_enabled"] != validated["tradingview_guard_enabled"]:
+            audit.record(db, actor=f"user:{user.id}", action="tradingview.configure",
+                         target_user_id=user.id, detail=f"enabled={validated['tradingview_guard_enabled']}")
+        if not validated["tradingview_guard_enabled"]:
+            instance.tradingview_paused = False
+        if runtime_changed:
+            await asyncio.to_thread(provisioning.provision_bot, db, user)
+        db.commit()
+        if not runtime_changed:
+            try:
+                await trading_guard.sync_state(db, instance)
+            except ProxyError:
+                pass  # persisted intent is retried by the reconciler
+        public_stats.invalidate()
+        db.refresh(instance)
+        return _config_out(instance)
 
 
 @router.api_route("/bot/ft/{ft_path:path}", methods=["GET", "POST", "DELETE"])
@@ -148,20 +173,33 @@ async def proxy_to_bot(ft_path: str, request: Request, user: CurrentUser, db: Db
         if raw:
             body = await request.json()
 
-    try:
-        upstream = await proxy.forward(instance, method, ft_path, params=params, json=body)
-    except ProxyError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY, detail=f"bot unreachable: {exc}"
-        ) from exc
-
-    # Persist "should this bot be trading?" only once the bot has actually accepted the
-    # command, so a rejected start never leaves the reconciler chasing a bot that cannot
-    # run. This is the sole write on an otherwise read-through proxy.
-    intent = _TRADING_INTENT.get((method, ft_path))
-    if intent is not None and upstream.status_code == 200:
-        instance.trading_enabled = intent
-        db.commit()
+    lock = trading_guard.bot_lock(instance.id) if method != "GET" else nullcontext()
+    async with lock:
+        if method != "GET":
+            db.refresh(instance)
+        target = ft_path
+        if method == "POST" and ft_path == "start" and (
+            instance.tradingview_guard_enabled and instance.tradingview_paused
+        ):
+            target = "pause"
+        if method == "POST" and ft_path == "forceenter" and (
+            instance.manual_paused or (instance.tradingview_guard_enabled and instance.tradingview_paused)
+        ):
+            raise HTTPException(status_code=409, detail="new entries are paused")
+        try:
+            upstream = await proxy.forward(instance, method, target, params=params, json=body)
+        except ProxyError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY, detail=f"bot unreachable: {exc}"
+            ) from exc
+        intent = _TRADING_INTENT.get((method, ft_path))
+        if intent is not None and upstream.status_code == 200:
+            instance.trading_enabled = intent
+            instance.manual_paused = ft_path == "pause"
+            instance.entry_pause_managed = target == "pause"
+            instance.entry_pause_pending = False
+            db.commit()
+            public_stats.invalidate()
 
     return Response(
         content=upstream.content,

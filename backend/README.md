@@ -65,3 +65,36 @@ curl -s -X POST localhost:9000/api/auth/login \
   as `FREQTRADE__*` env vars into containers. They are never written to disk in plaintext.
 - Per-user Freqtrade containers must run on an **internal docker network with no
   published host ports**. Only the control plane is internet-facing, behind TLS.
+
+## TradingView entry protection
+
+Protection is enabled by default for existing and new bots; owners can disable it in
+Settings (`tradingview_guard_enabled`). State APIs and the user, admin and public views
+show whether it is active independently of container/trading state.
+
+The reconciler reads each bot's actual whitelist and queries TradingView on that bot's
+exchange and timeframe. All pairs rated Venta/Venta fuerte pause entries; a strict
+majority rated Compra/Compra fuerte resumes entries. Open positions continue to use
+Freqtrade's normal exits and stoploss. Empty lists, unsupported symbols, incomplete
+ratings and scanner failures leave the guard decision unchanged. Every pair counts in
+the majority denominator, including neutrals.
+
+Manual Stop prevents automatic starts. Manual Pause is persisted and restored without
+enabling entries after a reboot. Start respects an active automatic pause; disable the
+guard to release it early. Forced entries through the control plane respect pauses too.
+Failed commands retry on the next pass; disabling only this setting does not recreate
+the container. Guard transitions and successful automatic commands enter the audit log.
+
+Keep `CP_TRADING_RECONCILE_INTERVAL=60` for minute checks. Setting it to zero disables
+both reconciliation and automatic protection. The deployed single Uvicorn worker owns
+the loop and per-bot command locks; use one API worker per control-plane database.
+Startup adds the persistent pause/evaluation columns without discarding existing data.
+The public technical sidebar retains its default-exchange reference; the guard's
+per-bot evaluation reports its own exchange, timeframe and counts.
+
+Offline regression tests (in-memory database, mocked scanner and Freqtrade):
+
+```bash
+cd backend
+.venv/bin/python -m unittest test_trading_guard -v
+```

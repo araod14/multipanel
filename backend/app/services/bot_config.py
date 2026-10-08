@@ -30,6 +30,7 @@ COMMON_BASE_COINS = sorted(
 STAKE_CURRENCY = "USDT"
 
 DEFAULTS: dict[str, Any] = {
+    "tradingview_guard_enabled": True,
     "strategy": strategy_assets.DEFAULT_STRATEGY_KEY,
     "pairlist_mode": "static",
     "pairs": ["BTC/USDT", "ETH/USDT"],
@@ -76,6 +77,9 @@ def validate(payload: dict[str, Any], *, dry_run: bool) -> dict[str, Any]:
     if "roi_table" not in payload and "roi" in payload:  # accept the legacy single value
         cfg["roi_table"] = [{"minutes": 0, "roi": payload["roi"]}]
     cfg.update({k: v for k, v in payload.items() if k in DEFAULTS})
+
+    if not isinstance(cfg["tradingview_guard_enabled"], bool):
+        raise ConfigValidationError("tradingview_guard_enabled must be a boolean")
 
     if cfg["strategy"] not in strategy_assets.STRATEGIES:
         raise ConfigValidationError(f"unknown strategy '{cfg['strategy']}'")

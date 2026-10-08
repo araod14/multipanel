@@ -4,11 +4,11 @@ import { useQuery } from "@tanstack/react-query";
 import { userApi } from "../../api/user";
 import type { FtPerformanceEntry, FtProfit } from "../../api/types";
 import { Metric } from "../../components/Metric";
-import { accountOfContainer, ModeBadge, StatusBadge } from "../../components/StatusBadge";
+import { accountOfContainer, ModeBadge, StatusBadge, TradingViewGuardStatus } from "../../components/StatusBadge";
 import { fmt, pct, signed } from "../../lib/format";
 
 export function DashboardPage() {
-  const bot = useQuery({ queryKey: ["me-bot"], queryFn: userApi.myBot, retry: false });
+  const bot = useQuery({ queryKey: ["me-bot"], queryFn: userApi.myBot, retry: false, refetchInterval: 15000 });
   const profit = useQuery({
     queryKey: ["me-profit"],
     queryFn: userApi.profit,
@@ -64,6 +64,7 @@ export function DashboardPage() {
           ) : (
             <div className="row">
               <StatusBadge status={bot.data!.status} />
+              <TradingViewGuardStatus bot={bot.data!} />
               <ModeBadge
                 dryRun={bot.data!.dry_run}
                 account={accountOfContainer(bot.data!.container_name)}

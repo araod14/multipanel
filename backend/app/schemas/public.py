@@ -11,6 +11,7 @@ added. When in doubt, leave it out — see also the field allowlist test in
 from datetime import datetime
 
 from pydantic import BaseModel
+from app.schemas.bots import TradingViewEvaluation
 
 
 class PublicPairPerf(BaseModel):
@@ -56,6 +57,12 @@ class PublicAccount(BaseModel):
     # What the owner asked for, so a reader can tell "stopped on purpose" apart from
     # "stopped by accident and about to be resumed".
     trading_enabled: bool
+    tradingview_guard_enabled: bool
+    tradingview_paused: bool
+    manual_paused: bool
+    entry_pause_managed: bool
+    entry_pause_pending: bool
+    tradingview_evaluation: TradingViewEvaluation | None
     dry_run: bool
     exchange: str | None
 

@@ -8,7 +8,7 @@ import { BrandMark } from "../../components/BrandMark";
 import { Metric } from "../../components/Metric";
 import { ProfitCell } from "../../components/ProfitCell";
 import { Sparkline } from "../../components/Sparkline";
-import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
+import { ModeBadge, StatusBadge, TradingViewGuardStatus } from "../../components/StatusBadge";
 import TechnicalPanel from "../../components/TechnicalPanel";
 import { fmt, pct, signed } from "../../lib/format";
 import { filterAccounts, type AccountMode, type AccountOrder } from "../../lib/results";
@@ -256,6 +256,7 @@ function AccountState({ account }: { account: PublicAccount }) {
     <div className="row account-state">
       <StatusBadge status={badgeStatus(account)} />
       <TradingBadge account={account} />
+      <TradingViewGuardStatus bot={account} />
       {!account.reachable && <span className="badge error">Sin conexión</span>}
     </div>
   );
@@ -272,6 +273,7 @@ function AccountDetail({ account: a, stake }: { account: PublicAccount; stake: s
         <div className="row">
           <StatusBadge status={badgeStatus(a)} />
           <TradingBadge account={a} />
+          <TradingViewGuardStatus bot={a} />
           <ModeBadge dryRun={a.dry_run} account={a.username} />
           {a.exchange && <span className="chip chip--plain">{a.exchange}</span>}
         </div>
@@ -447,6 +449,7 @@ function TradingBadge({ account: a }: { account: PublicAccount }) {
   const state = a.bot_state?.toLowerCase();
   if (state === "running") return <span className="badge running">operando</span>;
   if (state === "paused") return <span className="badge stopped">pausado</span>;
+  if (a.manual_paused || (a.tradingview_guard_enabled && a.tradingview_paused)) return <span className="badge stopped">compras pausadas</span>;
   if (a.trading_enabled) return <span className="badge stopped">reanudando…</span>;
   return <span className="badge provisioned">sin operar</span>;
 }

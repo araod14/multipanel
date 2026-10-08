@@ -23,6 +23,7 @@ class RoiStep(BaseModel):
 class BotConfigOut(BaseModel):
     """The user's current editable settings plus the available choices."""
 
+    tradingview_guard_enabled: bool
     strategy: str
     pairlist_mode: str
     pairs: list[str]
@@ -51,6 +52,7 @@ class BotConfigOut(BaseModel):
 class BotConfigIn(BaseModel):
     """User-submitted settings update (all fields optional; merged over current)."""
 
+    tradingview_guard_enabled: bool | None = None
     strategy: str | None = None
     pairlist_mode: str | None = None
     pairs: list[str] | None = None

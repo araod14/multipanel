@@ -6,7 +6,7 @@ import { AxiosError } from "axios";
 
 import { adminApi } from "../../api/admin";
 import type { ExchangeCredentialMeta } from "../../api/types";
-import { ModeBadge, StatusBadge } from "../../components/StatusBadge";
+import { ModeBadge, StatusBadge, TradingViewGuardStatus } from "../../components/StatusBadge";
 
 export function UserDetailPage() {
   const { userId } = useParams();
@@ -18,6 +18,7 @@ export function UserDetailPage() {
     queryKey: ["bot", id],
     queryFn: () => adminApi.getBot(id),
     retry: false,
+    refetchInterval: 15000,
   });
   const exchange = useQuery({
     queryKey: ["exchange", id],
@@ -75,6 +76,7 @@ export function UserDetailPage() {
           <>
             <div className="row mb-12">
               <StatusBadge status={bot.data.status} />
+              <TradingViewGuardStatus bot={bot.data} />
               <ModeBadge dryRun={bot.data.dry_run} />
               <span className="muted">Cuenta #{id}</span>
             </div>

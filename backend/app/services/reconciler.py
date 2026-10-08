@@ -1,21 +1,4 @@
-"""Keeps each bot's actual trading state matching the state its owner asked for.
-
-Freqtrade containers are launched with ``initial_state: stopped`` (see
-``config_builder``), and a container has no memory of having been started: after a host
-reboot, a docker daemon restart or a re-provision, every bot comes back with its trading
-loop idle and *nothing says so*. That is how three production bots sat stopped for two
-days while their containers reported perfectly healthy.
-
-``BotInstance.trading_enabled`` records the intent — set when a user presses Start or
-Stop, which ``routers/user.py`` intercepts. This loop periodically compares that intent
-against what each bot actually reports and starts the ones that drifted.
-
-Deliberately one-directional: it only ever **starts** a bot that should be trading. It
-never stops one, because the flag defaults to false for pre-existing rows and a
-stop-enforcing loop would silently shut those down on first run. It also only acts on a
-bot reporting ``stopped`` — a bot the user explicitly *paused* is left alone — and it
-never touches container lifecycle, which stays the admin's call.
-"""
+"""Restore owner intent and evaluate TradingView entry protection every minute."""
 
 import asyncio
 import logging
@@ -26,78 +9,91 @@ from sqlalchemy.orm import selectinload
 from app.config import get_settings
 from app.database import SessionLocal
 from app.models.bot_instance import BotInstance
-from app.services.proxy import ProxyError, forward
+from app.models.user import User
+from app.services import bot_config, proxy, trading_guard, tradingview
+from app.services.proxy import ProxyError
 from app.services.runtime import BotRuntime
 
 logger = logging.getLogger("control_plane.reconciler")
 
-# Freqtrade's own words for a bot whose trading loop is idle. Anything else — running,
-# paused, reload_config — is left untouched.
-_RESUMABLE_STATES = {"stopped"}
+
+def _exchange(instance: BotInstance) -> str:
+    cred = instance.user.exchange_credential
+    return cred.exchange_name if cred else get_settings().default_exchange
 
 
 async def reconcile_once() -> dict[str, int]:
-    """Run one reconciliation pass. Returns a small tally for logging/tests."""
-    tally = {"checked": 0, "resumed": 0, "failed": 0}
-
+    """Batch fresh scanner queries, then re-read intent under each bot's lock."""
+    tally = {"checked": 0, "resumed": 0, "paused": 0, "failed": 0}
     with SessionLocal() as db:
-        instances = list(
-            db.scalars(
-                select(BotInstance)
-                .options(selectinload(BotInstance.user))
-                .where(BotInstance.trading_enabled.is_(True))
-            ).all()
-        )
+        instances = list(db.scalars(select(BotInstance).options(
+            selectinload(BotInstance.user).selectinload(User.exchange_credential)
+        )).all())
         if not instances:
             return tally
+        states = await asyncio.to_thread(_container_states, [i.container_name for i in instances])
+        snapshots = {}
+        sem = asyncio.Semaphore(8)
 
-        states = await asyncio.to_thread(
-            _container_states, [i.container_name for i in instances]
-        )
-        for instance in instances:
-            # A container that is not up is not this loop's business; an admin stopped
-            # it, or provisioning is mid-flight.
+        async def collect(instance):
             if states.get(instance.container_name) != "running":
-                continue
-            tally["checked"] += 1
-            try:
-                if await _resume_if_idle(instance):
-                    tally["resumed"] += 1
-            except ProxyError as exc:
-                # A bot still loading markets is unreachable but perfectly healthy;
-                # the next pass will pick it up.
-                logger.info("reconciler: %s unreachable: %s", instance.container_name, exc)
-            except Exception:
-                tally["failed"] += 1
-                logger.exception("reconciler: %s failed", instance.container_name)
+                return
+            async with sem:
+                db.refresh(instance)
+                cfg = bot_config.effective(instance.user_config_json)
+                exchange = _exchange(instance)
+                pairs = set()
+                try:
+                    pairs_resp = await proxy.forward(instance, "GET", "whitelist")
+                    if pairs_resp.status_code == 200:
+                        raw = pairs_resp.json().get("whitelist")
+                        if isinstance(raw, list) and all(isinstance(p, str) for p in raw):
+                            pairs = set(raw)
+                except (ProxyError, ValueError, AttributeError):
+                    logger.info("reconciler: bot=%s data unavailable", instance.id)
+                # An unavailable runtime list is missing data, even for static bots.
+                snapshots[instance.id] = (cfg, exchange, pairs)
 
-    if tally["resumed"]:
-        logger.warning("reconciler: resumed trading on %d bot(s)", tally["resumed"])
+        await asyncio.gather(*(collect(i) for i in instances))
+        grouped = {}
+        for cfg, exchange, pairs in snapshots.values():
+            if cfg["tradingview_guard_enabled"]:
+                grouped.setdefault(exchange, {}).setdefault(cfg["timeframe"], set()).update(pairs)
+        exchanges = list(grouped)
+        fetched = await asyncio.gather(*(
+            tradingview.ratings(grouped[e], exchange=e) for e in exchanges
+        ))
+        ratings_by_exchange = dict(zip(exchanges, fetched))
+
+    # Do not reuse the collecting session: manual commands/config may have changed
+    # while the scanner was in flight. The fingerprint rejects obsolete config data.
+    for instance_id, (cfg, exchange, pairs) in snapshots.items():
+        async with trading_guard.bot_lock(instance_id):
+            with SessionLocal() as db:
+                instance = db.get(BotInstance, instance_id)
+                if instance is None:
+                    continue
+                if bot_config.effective(instance.user_config_json) != cfg or _exchange(instance) != exchange:
+                    continue
+                tally["checked"] += 1
+                try:
+                    if instance.tradingview_guard_enabled:
+                        evaluation = trading_guard.evaluate(
+                            pairs, cfg["timeframe"], exchange, ratings_by_exchange.get(exchange, {})
+                        )
+                        trading_guard.apply_evaluation(db, instance, evaluation)
+                        db.commit()
+                    command = await trading_guard.sync_state(db, instance)
+                    if command == "start":
+                        tally["resumed"] += 1
+                    elif command == "pause":
+                        tally["paused"] += 1
+                except ProxyError:
+                    logger.info("reconciler: bot=%s unreachable", instance_id)
+                except Exception:
+                    tally["failed"] += 1
+                    logger.exception("reconciler: bot=%s failed", instance_id)
     return tally
-
-
-async def _resume_if_idle(instance: BotInstance) -> bool:
-    """Start the trading loop if the bot reports itself stopped. True if it was."""
-    resp = await forward(instance, "GET", "show_config")
-    if resp.status_code != 200:
-        return False
-    state = resp.json().get("state")
-    if not isinstance(state, str) or state.lower() not in _RESUMABLE_STATES:
-        return False
-
-    started = await forward(instance, "POST", "start")
-    if started.status_code != 200:
-        logger.warning(
-            "reconciler: %s start -> HTTP %s %s",
-            instance.container_name,
-            started.status_code,
-            started.text[:200],
-        )
-        return False
-    logger.warning(
-        "reconciler: %s was stopped but should be trading — resumed", instance.container_name
-    )
-    return True
 
 
 def _container_states(names: list[str]) -> dict[str, str | None]:
@@ -120,12 +116,15 @@ async def run_forever() -> None:
     interval = get_settings().trading_reconcile_interval
     logger.info("reconciler: started, every %ss", interval)
     while True:
+        started = asyncio.get_running_loop().time()
         try:
-            await asyncio.sleep(interval)
             await reconcile_once()
+            elapsed = asyncio.get_running_loop().time() - started
+            await asyncio.sleep(max(1.0, interval - elapsed))
         except asyncio.CancelledError:
             logger.info("reconciler: stopped")
             raise
         except Exception:
             # Never let one bad pass kill the loop — it is the safety net itself.
             logger.exception("reconciler: pass failed")
+            await asyncio.sleep(interval)

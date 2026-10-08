@@ -4,6 +4,8 @@ Bot provisioning (container lifecycle) is wired in Phase 1; here we manage the u
 records and audit trail. Creating a user does not yet launch a container.
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.config import get_settings
@@ -19,7 +21,14 @@ from app.schemas.exchange import (
 from app.schemas.users import UserCreate, UserOut
 from app.security.deps import CurrentAdmin, DbSession
 from app.security.passwords import hash_password
-from app.services import audit, exchange_creds, exchange_probe, provisioning
+from app.services import (
+    audit,
+    exchange_creds,
+    exchange_probe,
+    provisioning,
+    public_stats,
+    trading_guard,
+)
 from app.services.exchange_probe import (
     ExchangeProbeUnavailable,
     InvalidExchangeCredentials,
@@ -116,24 +125,36 @@ def provision(user_id: int, admin: CurrentAdmin, db: DbSession) -> BotInstance:
 
 
 @router.post("/users/{user_id}/bot/start", response_model=BotInstanceOut)
-def start_bot(user_id: int, admin: CurrentAdmin, db: DbSession) -> BotInstance:
-    """Start the user's (already provisioned) container."""
+async def start_bot(user_id: int, admin: CurrentAdmin, db: DbSession) -> BotInstance:
+    """Start the container and request trading, subject to entry protection."""
     instance = _require_bot(db, user_id)
-    provisioning.start_bot(db, instance)
-    audit.record(db, actor=f"admin:{admin.id}", action="bot.start", target_user_id=user_id)
-    db.commit()
-    db.refresh(instance)
+    async with trading_guard.bot_lock(instance.id):
+        db.refresh(instance)
+        await asyncio.to_thread(provisioning.start_bot, db, instance)
+        instance.trading_enabled = True
+        instance.manual_paused = False
+        audit.record(db, actor=f"admin:{admin.id}", action="bot.start", target_user_id=user_id)
+        db.commit()
+        public_stats.invalidate()
+        db.refresh(instance)
     return instance
 
 
 @router.post("/users/{user_id}/bot/stop", response_model=BotInstanceOut)
-def stop_bot(user_id: int, admin: CurrentAdmin, db: DbSession) -> BotInstance:
+async def stop_bot(user_id: int, admin: CurrentAdmin, db: DbSession) -> BotInstance:
     """Stop the user's container without deleting its data."""
     instance = _require_bot(db, user_id)
-    provisioning.stop_bot(db, instance)
-    audit.record(db, actor=f"admin:{admin.id}", action="bot.stop", target_user_id=user_id)
-    db.commit()
-    db.refresh(instance)
+    async with trading_guard.bot_lock(instance.id):
+        db.refresh(instance)
+        await asyncio.to_thread(provisioning.stop_bot, db, instance)
+        instance.trading_enabled = False
+        instance.manual_paused = False
+        instance.entry_pause_managed = False
+        instance.entry_pause_pending = False
+        audit.record(db, actor=f"admin:{admin.id}", action="bot.stop", target_user_id=user_id)
+        db.commit()
+        public_stats.invalidate()
+        db.refresh(instance)
     return instance
 
 
